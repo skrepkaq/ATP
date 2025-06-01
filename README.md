@@ -29,8 +29,8 @@ ATP - это архиватор TikTok видео, который автомат
 
 ### Docker
 ```bash
-docker compose -f compose.from-file.yml up
-docker compose -f compose.from-file.yml logs -f
+docker compose up atp-from-file -d
+docker compose logs atp-from-file -f
 ```
 
 ### Без docker
