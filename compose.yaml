@@ -1,0 +1,31 @@
+services:
+  atp:
+    build: .
+    container_name: atp
+    user: 1000:1000
+    volumes:
+      - ./downloads:/app/downloads
+      - ./tiktok_videos.db:/app/tiktok_videos.db
+    env_file:
+      - .env
+    environment:
+      - DATABASE=/app/tiktok_videos.db
+      - DOWNLOADS_DIR=/app/downloads
+    restart: unless-stopped
+
+  atp-from-file:
+    build: .
+    container_name: atp-from-file
+    entrypoint: ["python", "-um", "atp.import_from_file"]
+    user: 1000:1000
+    volumes:
+      - ./downloads:/app/downloads
+      - ./tiktok_videos.db:/app/tiktok_videos.db
+      - ./user_data_tiktok.json:/app/user_data_tiktok.json:ro
+    env_file:
+      - .env
+    environment:
+      - DATABASE=/app/tiktok_videos.db
+      - DOWNLOADS_DIR=/app/downloads
+      - TIKTOK_DATA_FILE=/app/user_data_tiktok.json
+    profiles: ["from-file"]
