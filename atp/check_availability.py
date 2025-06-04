@@ -49,6 +49,7 @@ def check_video_batch() -> None:
                 available = check_video_availability(video.id)
             except NetworkError:
                 print("Encountered a network error, skipping")
+                continue
 
             if available:
                 update_video_last_checked(db, video.id)
