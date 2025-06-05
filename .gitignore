@@ -197,3 +197,4 @@ downloads/*
 !.gitkeep
 *.db
 user_data_tiktok.json
+result.json

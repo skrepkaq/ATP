@@ -13,7 +13,7 @@ import math
 from TikTokApi import TikTokApi
 from TikTokApi.exceptions import EmptyResponseException, InvalidResponseException
 
-from atp.crud import add_video_to_db, get_all_videos
+from atp import crud
 from atp.database import get_db_session
 from atp.download import download
 from atp.settings import MS_TOKEN, TIKTOK_USER
@@ -24,7 +24,7 @@ async def import_from_tiktok() -> None:
     async with TikTokApi() as api:
         db = get_db_session()
 
-        videos = get_all_videos(db)
+        videos = crud.get_all_videos(db)
         if not videos:
             print("No videos in DB. Please import using import_from_file.py")
             # Удалить чтобы импортировать все видео из тиктока а не файла (дольше и только лайкнутые без сохранённых)
@@ -47,7 +47,7 @@ async def import_from_tiktok() -> None:
 
                 if video.id not in video_ids:
                     print(f"Import video {video.id}")
-                    add_video_to_db(db, video.id, video.create_time)
+                    crud.add_video_to_db(db, video.id, video.create_time)
 
                 if len(new_videos) >= 20 and set(new_videos[-20:]).issubset(video_ids):
                     # Все 20 последних видео уже есть в БД, ливаем

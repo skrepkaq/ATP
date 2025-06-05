@@ -12,7 +12,7 @@ import json
 import os
 from datetime import datetime
 
-from atp.crud import add_video_to_db
+from atp import crud
 from atp.database import get_db_session, run_migrations
 from atp.download import download
 from atp.settings import IMPORT_FAVORITE_VIDEOS, IMPORT_LIKED_VIDEOS, TIKTOK_DATA_FILE
@@ -82,7 +82,7 @@ def import_from_file() -> None:
                     + f"Import videos: {added_count: >{len(videos) % 10}}/{len(videos)}",
                     flush=True,
                 )
-                add_video_to_db(db, video["id"], video["date"])  # TODO: make faster
+                crud.add_video_to_db(db, video["id"], video["date"])  # TODO: make faster
                 added_count += 1
             except Exception as e:
                 print(f"Error importing video: {e}")
