@@ -56,6 +56,23 @@ def update_video_status(
     return False
 
 
+def update_video_message_id(db: Session, video_id: str, message_id: int | None) -> bool:
+    """Обновляет ID сообщения видео в базе данных.
+
+    :param db: Сессия базы данных
+    :param video_id: ID видео
+    :param message_id: ID сообщения
+
+    :return: True если успешно, False если видео не найдено
+    """
+    db_video = db.query(Video).filter(Video.id == video_id).first()
+    if db_video:
+        db_video.message_id = message_id
+        db.commit()
+        return True
+    return False
+
+
 def update_video_last_checked(db: Session, video_id: str) -> bool:
     """Обновляет время последней проверки видео на текущее.
 
@@ -84,7 +101,7 @@ def get_videos_to_check(db: Session, limit: int) -> list[Video]:
     """
     return (
         db.query(Video)
-        .filter(Video.status == "success")
+        .filter(Video.status.in_(["success", "deleted"]))
         .order_by(Video.last_checked)
         .limit(limit)
         .all()
