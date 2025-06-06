@@ -15,7 +15,10 @@ from atp import crud
 from atp.database import get_db_session
 from atp.models import Video
 from atp.settings import CHECK_INTERVAL_DAYS
-from atp.telegram_notifier import delete_message, send_video_deleted_notification
+from atp.telegram_notifier import (
+    handle_video_restoration,
+    send_video_deleted_notification,
+)
 from atp.ytdlp import NetworkError, check_video_availability
 
 
@@ -54,7 +57,7 @@ def check_video_batch() -> None:
                     print(f"Video {video.id} has been restored!")
                     if video.message_id:
                         print(f"Deleting message {video.message_id}")
-                        delete_message(video.message_id)
+                        handle_video_restoration(video)
                     crud.update_video_message_id(db, video.id, None)
                     crud.update_video_status(db, video.id, "success")
                     restored_count += 1

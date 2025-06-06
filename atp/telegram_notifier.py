@@ -2,6 +2,8 @@
 Модуль для отправки уведомлений в Telegram
 """
 
+import io
+import json
 import os
 
 import requests
@@ -11,11 +13,11 @@ from atp.settings import DOWNLOADS_DIR, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
 
 def send_video_deleted_notification(video: Video) -> bool:
-    """Отправляет уведомление в Telegram о видео, которое было удалено из TikTok.
+    """Отправляет уведомление в Telegram о видео, удалённом из TikTok.
 
     :param video: Объект видео из базы данных
 
-    :return: True если сообщение было успешно отправлено, False в противном случае
+    :return: True если сообщение отправлено, False иначе
     """
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("Error: Telegram parameters not configured (token or chat ID)")
@@ -31,7 +33,10 @@ def send_video_deleted_notification(video: Video) -> bool:
             files = {"video": video_file}
             data = {
                 "chat_id": TELEGRAM_CHAT_ID,
-                "caption": f"{video.author + '\n' if video.author else ''}{video.name}\n{video.date.strftime('%d.%m.%Y')}",
+                "caption": (
+                    f"{video.author + '\n' if video.author else ''}"
+                    f"{video.name}\n{video.date.strftime('%d.%m.%Y')}"
+                ),
                 "supports_streaming": True,
             }
             url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
@@ -55,7 +60,7 @@ def send_message(text: str) -> bool:
 
     :param text: Текст сообщения для отправки
 
-    :return: True если сообщение было успешно отправлено, False в противном случае
+    :return: True если сообщение отправлено, False иначе
     """
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("Error: Telegram parameters not configured (token or chat ID)")
@@ -81,32 +86,43 @@ def send_message(text: str) -> bool:
         return False
 
 
-def delete_message(message_id: int) -> bool:
-    """Удаляет сообщение из Telegram.
+def handle_video_restoration(video: Video) -> bool:
+    """Заменяет видео в сообщении на пустой файл.
+    Telegram не даёт удалить сообщение старше 48 часов, поэтому заменяем видео на пустой файл.
 
-    :param message_id: ID сообщения для удаления
+    :param video: Объект видео из базы данных
 
-    :return: True если сообщение было успешно удалено, False в противном случае
+    :return: True если сообщение отредактировано, False иначе
     """
+
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("Error: Telegram parameters not configured (token or chat ID)")
         return False
 
     try:
-        data = {
-            "chat_id": TELEGRAM_CHAT_ID,
-            "message_id": message_id,
+        file_name = 'restored'
+
+        media = {
+            "type": "document",
+            "media": f"attach://{file_name}",
         }
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteMessage"
-        response = requests.post(url, data=data)
+
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "message_id": video.message_id,
+            "media": json.dumps(media)
+        }
+
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageMedia"
+        response = requests.post(url, data=payload, files={file_name: (file_name, io.BytesIO(video.id.encode()))})
 
         if response.status_code == 200:
-            print("Telegram message deleted successfully.")
+            print("Telegram message caption edited successfully.")
             return True
         else:
-            print(f"Failed to delete Telegram message: {response.text}")
+            print(f"Failed to edit Telegram message caption: {response.text}")
             return False
 
     except Exception as e:
-        print(f"Exception occurred while deleting Telegram message: {e}")
+        print(f"Exception occurred while editing message caption: {e}")
         return False
