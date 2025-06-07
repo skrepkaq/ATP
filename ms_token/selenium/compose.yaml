@@ -1,0 +1,13 @@
+version: '3'
+services:
+  chrome:
+    image: selenium/standalone-chrome
+    ports:
+      - "4444:4444"
+      - "7900:7900"  # VNC server for viewing browser
+    shm_size: 2g
+    environment:
+      - SE_NODE_MAX_SESSIONS=1
+      - SE_NODE_OVERRIDE_MAX_SESSIONS=true 
+      - VNC_NO_PASSWORD=1
+      - SE_VNC_NO_PASSWORD=true
