@@ -11,8 +11,22 @@ services:
     environment:
       - DATABASE=/app/tiktok_videos.db
       - DOWNLOADS_DIR=/app/downloads
+      - BROWSERLESS_URL=ws://browserless:3000
+    depends_on:
+      browserless:
+        condition: service_healthy
     restart: unless-stopped
-
+  browserless:
+    image: ghcr.io/browserless/chromium:v2.31.0
+    attach: false
+    # ports:
+    #   - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/docs"]
+      interval: 2s
+      timeout: 2s
+      retries: 3
+      start_period: 2s
   atp-from-file:
     build: .
     container_name: atp-from-file

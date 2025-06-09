@@ -10,35 +10,77 @@
 import asyncio
 import math
 
+from playwright.async_api import async_playwright
 from TikTokApi import TikTokApi
 from TikTokApi.exceptions import EmptyResponseException, InvalidResponseException
+from TikTokApi.helpers import random_choice
 
 from atp import crud
 from atp.database import get_db_session
 from atp.download import download
-from atp.settings import MS_TOKEN, TIKTOK_USER
+from atp.settings import BROWSERLESS_URL, TIKTOK_USER
 from atp.telegram_notifier import send_message
 
 
+class CDPTikTokApi(TikTokApi):
+    """TikTok API с поддержкой Chrome DevTools Protocol."""
+
+    async def create_sessions(
+        self,
+        cdp_url,
+        num_sessions=5,
+        ms_tokens=None,
+        proxies=None,
+        sleep_after=1,
+        starting_url="https://www.tiktok.com",
+        context_options={},
+        cookies=None,
+        suppress_resource_load_types=None,
+        timeout=30000,
+    ):
+        """
+        Расширяет TikTokApi.create_sessions с поддержкой connect_over_cdp.
+        """
+        self.playwright = await async_playwright().start()
+        self.browser = await self.playwright.chromium.connect_over_cdp(
+            cdp_url + '?launch={"stealth": true}'
+        )
+
+        await asyncio.gather(
+            *(
+                self._TikTokApi__create_session(
+                    proxy=random_choice(proxies),
+                    ms_token=random_choice(ms_tokens),
+                    url=starting_url,
+                    context_options=context_options,
+                    sleep_after=sleep_after,
+                    cookies=random_choice(cookies),
+                    suppress_resource_load_types=suppress_resource_load_types,
+                    timeout=timeout,
+                )
+                for _ in range(num_sessions)
+            )
+        )
+
+
 async def import_from_tiktok() -> None:
-    async with TikTokApi() as api:
+    async with CDPTikTokApi() as api:
         db = get_db_session()
 
         videos = crud.get_all_videos(db)
         if not videos:
             print("No videos in DB. Please import using import_from_file.py")
-            # Удалить чтобы импортировать все видео из тиктока а не файла (дольше и только лайкнутые без сохранённых)
+            # Удалить чтобы импортировать все видео из тиктока а не файла
+            # (дольше и только лайкнутые без сохранённых)
             return
 
         video_ids: set[str] = set(v.id for v in videos)
         try:
             await api.create_sessions(
-                ms_tokens=[MS_TOKEN],
+                cdp_url=BROWSERLESS_URL,
+                ms_tokens=[None],
                 num_sessions=1,
-                sleep_after=3,
-                browser="chromium",
-                headless=True,
-                override_browser_args=[],  # не удалять, иначе docker взрывается и все умирают
+                sleep_after=3
             )
 
             new_videos: list[str] = []
@@ -55,13 +97,14 @@ async def import_from_tiktok() -> None:
                     break
         except EmptyResponseException as e:
             print(e)
-            send_message("msToken is invalid")  # спамим в телегу что токен сломался
+            # спамим в телегу что токен сломался
+            send_message("msToken is invalid")
         except InvalidResponseException as e:
             print(e)
         db.close()
 
-        # Запускаем скачивание новых видео
-        download()
+    # Запускаем скачивание новых видео
+    download()
 
 
 if __name__ == "__main__":

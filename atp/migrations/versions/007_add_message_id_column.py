@@ -55,7 +55,9 @@ def upgrade():
     bind = op.get_bind()
     session = Session(bind=bind)
 
-    videos = crud.get_all_videos(session, status="deleted")
+    if not (videos := crud.get_all_videos(session, status="deleted")):
+        return
+
     messages = load_messages()
 
     for message in messages:

@@ -16,11 +16,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"
-ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright
-
-RUN playwright install --with-deps chromium-headless-shell \
-    && apt clean \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY atp/ atp/
 COPY entrypoint.py .

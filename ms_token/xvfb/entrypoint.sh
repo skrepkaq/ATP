@@ -1,1 +1,0 @@
-xvfb-run python get_token_xvfb.py
