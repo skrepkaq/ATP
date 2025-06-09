@@ -1,6 +1,0 @@
-services:
-  ms-token-xvfb:
-    build: .
-    container_name: ms-token-xvfb
-    environment:
-      - DISPLAY=:99

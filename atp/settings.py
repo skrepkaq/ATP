@@ -16,8 +16,10 @@ TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # Настройки тиктока
 DOWNLOAD_FROM_TIKTOK: bool = os.getenv("DOWNLOAD_FROM_TIKTOK", "true").lower() == "true"
-MS_TOKEN: str | None = os.getenv("MS_TOKEN", None)
 TIKTOK_USER: str = os.getenv("TIKTOK_USER", "")
+
+# Настройки browserless
+BROWSERLESS_URL: str = os.getenv("BROWSERLESS_URL", "ws://localhost:3000")
 
 # Настройки проверки доступности
 CHECK_INTERVAL_DAYS: int = int(os.getenv("CHECK_INTERVAL_DAYS", "7"))
@@ -25,9 +27,7 @@ CHECK_INTERVAL_DAYS: int = int(os.getenv("CHECK_INTERVAL_DAYS", "7"))
 
 # Настройки импорта видео
 IMPORT_LIKED_VIDEOS: bool = os.getenv("IMPORT_LIKED_VIDEOS", "true").lower() == "true"
-IMPORT_FAVORITE_VIDEOS: bool = (
-    os.getenv("IMPORT_FAVORITE_VIDEOS", "true").lower() == "true"
-)
+IMPORT_FAVORITE_VIDEOS: bool = os.getenv("IMPORT_FAVORITE_VIDEOS", "true").lower() == "true"
 
 # Настройки временных директорий
 TMP_DIR: str = os.path.join(tempfile.gettempdir(), "gallery_dl")
