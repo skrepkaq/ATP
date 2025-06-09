@@ -18,6 +18,7 @@ services:
     restart: unless-stopped
   browserless:
     image: ghcr.io/browserless/chromium:v2.31.0
+    container_name: atp-browserless
     attach: false
     # ports:
     #   - "3000:3000"
