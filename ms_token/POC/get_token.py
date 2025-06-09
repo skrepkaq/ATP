@@ -1,20 +1,61 @@
 import asyncio
 import os
-import json
+
+from playwright.async_api import async_playwright
 from TikTokApi import TikTokApi
 from TikTokApi.exceptions import EmptyResponseException
+from TikTokApi.helpers import random_choice
 
-BROWSERLESS_URL = os.getenv("BROWSERLESS_URL")
-LAUNCH_OPTIONS = {
-    "headless": False,
-    "stealth": True,
-}
+
+BROWSERLESS_URL = os.getenv("BROWSERLESS_URL", "ws://localhost:3000")
+
+
+class CDPTikTokApi(TikTokApi):
+    async def create_sessions(
+        self,
+        cdp_url,
+        num_sessions=5,
+        ms_tokens=None,
+        proxies=None,
+        sleep_after=1,
+        starting_url="https://www.tiktok.com",
+        context_options={},
+        cookies=None,
+        suppress_resource_load_types=None,
+        timeout=30000,
+    ):
+        """
+        Extends TikTokApi.create_sessions with connect_over_cdp.
+        """
+        self.playwright = await async_playwright().start()
+        self.browser = await self.playwright.chromium.connect_over_cdp(
+            cdp_url + '?launch={"stealth": true}'
+        )
+
+        await asyncio.gather(
+            *(
+                self._TikTokApi__create_session(
+                    proxy=random_choice(proxies),
+                    ms_token=random_choice(ms_tokens),
+                    url=starting_url,
+                    context_options=context_options,
+                    sleep_after=sleep_after,
+                    cookies=random_choice(cookies),
+                    suppress_resource_load_types=suppress_resource_load_types,
+                    timeout=timeout,
+                )
+                for _ in range(num_sessions)
+            )
+        )
 
 
 async def get_token():
-    async with TikTokApi() as api:
+    async with CDPTikTokApi() as api:
         await api.create_sessions(
-            ms_tokens=[None], num_sessions=1, sleep_after=5, connect_over_cdp=f"{BROWSERLESS_URL}?launch={json.dumps(LAUNCH_OPTIONS)}"
+            cdp_url=BROWSERLESS_URL,
+            ms_tokens=[None],
+            num_sessions=1,
+            sleep_after=3
         )
         ms_token = api._get_session()[1].ms_token
 
@@ -23,9 +64,15 @@ async def get_token():
 
         return ms_token
 
+
 async def test_token(ms_token):
-    async with TikTokApi() as api:
-        await api.create_sessions(ms_tokens=[ms_token], num_sessions=1, sleep_after=5, connect_over_cdp=f"{BROWSERLESS_URL}?launch={json.dumps(LAUNCH_OPTIONS)}")
+    async with CDPTikTokApi() as api:
+        await api.create_sessions(
+            cdp_url=BROWSERLESS_URL,
+            ms_tokens=[ms_token],
+            num_sessions=1,
+            sleep_after=3
+        )
         ms_token = api._get_session()[1].ms_token
 
         print("Generated token:")

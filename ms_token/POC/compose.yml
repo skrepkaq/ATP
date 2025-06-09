@@ -7,13 +7,9 @@ services:
     depends_on:
       browserless:
         condition: service_healthy
-
-
   browserless:
     image: ghcr.io/browserless/chromium:v2.31.0
     attach: false
-    ports:
-      - "3000:3000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/docs"]
       interval: 2s
