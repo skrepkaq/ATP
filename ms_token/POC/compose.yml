@@ -1,0 +1,18 @@
+services:
+  ms-token-poc:
+    build: .
+    container_name: ms-token-poc
+    environment:
+      - BROWSERLESS_URL=ws://browserless:3000
+    depends_on:
+      browserless:
+        condition: service_healthy
+  browserless:
+    image: ghcr.io/browserless/chromium:v2.31.0
+    attach: false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/docs"]
+      interval: 2s
+      timeout: 2s
+      retries: 3
+      start_period: 2s
