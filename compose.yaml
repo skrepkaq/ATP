@@ -27,6 +27,7 @@ services:
       timeout: 2s
       retries: 3
       start_period: 2s
+    restart: unless-stopped
   atp-from-file:
     build: .
     container_name: atp-from-file
