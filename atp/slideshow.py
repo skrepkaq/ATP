@@ -56,6 +56,10 @@ def render_slideshow() -> bool:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
+    if result.returncode != 0:
+        # Звук скорее всего доступен, попробуйте скачать видео заново, если ошибка остаётся, создайте issue
+        print(f"Error downloading audio, try again: {result.stdout.decode('utf-8')}")
+        return False
     sound_len = float(result.stdout)
 
     print(f"Number of JPG files in {TMP_DIR}: {image_count}")
@@ -89,7 +93,7 @@ def render_slideshow() -> bool:
         "-vf",
         vf,
         "-r",
-        "30",  # Частота кадров выходного видео
+        "30",
         "-acodec",
         "aac",
         "-t",
@@ -129,12 +133,9 @@ def download_slideshow(video_id: str) -> bool:
         return False
 
     # Копирование результата в директорию загрузок
+    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
     output_file_path = os.path.join(TMP_DIR, "output.mp4")
-    if os.path.exists(output_file_path):
-        os.makedirs(DOWNLOADS_DIR, exist_ok=True)
-        target_path = os.path.join(DOWNLOADS_DIR, f"{video_id}.mp4")
-        shutil.copy(output_file_path, target_path)
-        print(f"Slideshow saved: {video_id}.mp4")
-        return True
-
-    return False
+    target_path = os.path.join(DOWNLOADS_DIR, f"{video_id}.mp4")
+    shutil.copy(output_file_path, target_path)
+    print(f"Slideshow saved: {video_id}.mp4")
+    return True
