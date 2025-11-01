@@ -64,18 +64,19 @@ class CDPTikTokApi(TikTokApi):
 
 
 async def import_from_tiktok() -> None:
-    async with CDPTikTokApi() as api:
-        db = get_db_session()
+    db = get_db_session()
 
-        videos = crud.get_all_videos(db)
-        if not videos:
-            print("No videos in DB. Please import using import_from_file.py")
-            # Удалить чтобы импортировать все видео из тиктока а не файла
-            # (дольше и только лайкнутые без сохранённых)
-            return
+    videos = crud.get_all_videos(db)
+    if not videos:
+        print("No videos in DB. Please import using import_from_file.py")
+        # Удалить чтобы импортировать все видео из тиктока а не файла
+        # (дольше и только лайкнутые без сохранённых)
+        return
 
-        video_ids: set[str] = set(v.id for v in videos)
-        try:
+    video_ids: set[str] = set(v.id for v in videos)
+
+    try:
+        async with CDPTikTokApi() as api:
             await api.create_sessions(
                 cdp_url=BROWSERLESS_URL,
                 ms_tokens=[None],
@@ -95,13 +96,9 @@ async def import_from_tiktok() -> None:
                     # Все 20 последних видео уже есть в БД, ливаем
                     print("No new videos, exiting")
                     break
-        except EmptyResponseException as e:
-            print(e)
-            # спамим в телегу что токен сломался
-            send_message("msToken is invalid")
-        except InvalidResponseException as e:
-            print(e)
-        db.close()
+    except Exception as e:
+        print(f"Error importing from TikTok: {e}")
+    db.close()
 
     # Запускаем скачивание новых видео
     download()
