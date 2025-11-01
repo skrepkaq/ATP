@@ -5,31 +5,38 @@ from sqlalchemy.orm import Session
 from atp.models import Video
 
 
-def add_video_to_db(
-    db: Session,
-    video_id: str,
-    date: datetime,
-    author: str | None = None,
-    status: str = "new",
-) -> Video:
+def add_video_to_db(db: Session, video_id: str, date: datetime) -> Video:
     """Добавляет видео в базу данных, если оно не существует.
 
     :param db: Сессия базы данных
     :param video_id: ID видео
     :param date: Дата добавления
-    :param author: Автор видео
-    :param status: Статус видео (по умолчанию: "new")
 
     :return: Объект видео в базе данных
     """
     db_video = db.query(Video).filter(Video.id == video_id).first()
 
     if not db_video:
-        db_video = Video(id=video_id, date=date, status=status, author=author)
+        db_video = Video(id=video_id, date=date)
         db.add(db_video)
         db.commit()
 
     return db_video
+
+
+def add_videos_bulk(db: Session, videos: list[dict[str, str | datetime]]) -> None:
+    """Добавляет список видео в базу данных.
+
+    :param db: Сессия базы данных
+    :param videos: Список словарей с информацией о видео
+    """
+    for video in videos:
+        if db.query(Video).filter(Video.id == video["id"]).first():
+            continue
+        db_video = Video(id=video["id"], date=video["date"])
+        db.add(db_video)
+
+    db.commit()
 
 
 def update_video_status(

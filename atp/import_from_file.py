@@ -74,20 +74,11 @@ def import_from_file() -> None:
         if not videos:
             return
 
-        added_count = 0
-        for video in videos:
-            try:
-                print(
-                    "\033[1A\r\033[K"
-                    + f"Import videos: {added_count: >{len(videos) % 10}}/{len(videos)}",
-                    flush=True,
-                )
-                crud.add_video_to_db(db, video["id"], video["date"])  # TODO: make faster
-                added_count += 1
-            except Exception as e:
-                print(f"Error importing video: {e}")
-
-        print(f"Added/checked {added_count} videos")
+        try:
+            crud.add_videos_bulk(db, videos)
+            print(f"Added/checked {len(videos)} videos")
+        except Exception as e:
+            print(f"Error importing videos: {e}")
 
     except Exception as e:
         print(f"Error importing from file: {e}")
