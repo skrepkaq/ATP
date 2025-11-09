@@ -8,8 +8,8 @@
 - Обновления информации о видео в базе данных
 """
 
-import os
 from datetime import datetime
+from pathlib import Path
 
 import yt_dlp
 from sqlalchemy.orm import Session
@@ -25,9 +25,7 @@ class NetworkError(Exception):
     pass
 
 
-def yt_dlp_request(
-    ydl_opts: dict[str, any], video_id: str, download: bool
-) -> dict[str, any]:
+def yt_dlp_request(ydl_opts: dict[str, any], video_id: str, download: bool) -> dict[str, any]:
     """Выполняет запрос к yt-dlp с обработкой сетевых ошибок.
 
     :param ydl_opts: Опции для yt-dlp
@@ -62,9 +60,7 @@ def yt_dlp_request(
         except Exception as e:
             exc = e
             error_msg = str(e)
-            print(
-                f"Error checking video {video_id} (attempt {attempt + 1}/{MAX_RETRIES}): {e}"
-            )
+            print(f"Error checking video {video_id} (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
 
             is_network_error = any(err in error_msg for err in network_errors)
 
@@ -86,7 +82,7 @@ def download_video(db: Session, video_id: str) -> bool | None:
     """
     ydl_opts = {
         "format": "best",
-        "outtmpl": os.path.join(DOWNLOADS_DIR, f"{video_id}.mp4"),
+        "outtmpl": str(Path(DOWNLOADS_DIR) / f"{video_id}.mp4"),
         "quiet": False,
         "no_warnings": False,
     }
@@ -140,7 +136,7 @@ def check_video_availability(video_id: str) -> bool:
     try:
         yt_dlp_request(ydl_opts, video_id, download=False)
         return True
-    except NetworkError:
-        raise NetworkError
+    except NetworkError as e:
+        raise NetworkError from e
     except Exception:
         return False

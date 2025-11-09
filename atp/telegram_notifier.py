@@ -4,12 +4,13 @@
 
 import io
 import json
-import os
+from pathlib import Path
 
 import requests
 
+from atp import settings
+from atp.config_init import set_config_value
 from atp.models import Video
-from atp.settings import DOWNLOADS_DIR, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
 
 def send_video_deleted_notification(video: Video) -> bool:
@@ -19,12 +20,12 @@ def send_video_deleted_notification(video: Video) -> bool:
 
     :return: True если сообщение отправлено, False иначе
     """
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+    if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_CHAT_ID:
         print("Error: Telegram parameters not configured (token or chat ID)")
         return False
 
-    video_path = os.path.join(DOWNLOADS_DIR, f"{video.id}.mp4")
-    if not os.path.exists(video_path):
+    video_path = Path(settings.DOWNLOADS_DIR) / f"{video.id}.mp4"
+    if not video_path.exists():
         print(f"Error: video file not found: {video_path}")
         return False
 
@@ -32,19 +33,19 @@ def send_video_deleted_notification(video: Video) -> bool:
         with open(video_path, "rb") as video_file:
             files = {"video": video_file}
             data = {
-                "chat_id": TELEGRAM_CHAT_ID,
+                "chat_id": settings.TELEGRAM_CHAT_ID,
                 "caption": (
                     f"{video.author + '\n' if video.author else ''}"
                     f"{video.name}\n{video.date.strftime('%d.%m.%Y')}"
                 ),
                 "supports_streaming": True,
             }
-            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
-            response = requests.post(url, data=data, files=files)
+            url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendVideo"
+            response = requests.post(url, data=data, files=files, timeout=60)
 
         if response.status_code == 200:
             print("Telegram notification sent successfully.")
-            message_id = response.json().get('result', {}).get('message_id')
+            message_id = response.json().get("result", {}).get("message_id")
             return message_id
         else:
             print(f"Failed to send Telegram notification: {response.text}")
@@ -52,37 +53,6 @@ def send_video_deleted_notification(video: Video) -> bool:
 
     except Exception as e:
         print(f"Exception occurred while sending Telegram notification: {e}")
-        return False
-
-
-def send_message(text: str) -> bool:
-    """Отправляет сообщение в Telegram.
-
-    :param text: Текст сообщения для отправки
-
-    :return: True если сообщение отправлено, False иначе
-    """
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("Error: Telegram parameters not configured (token or chat ID)")
-        return False
-
-    try:
-        data = {
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": text,
-        }
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        response = requests.post(url, data=data)
-
-        if response.status_code == 200:
-            print("Telegram message sent successfully.")
-            return True
-        else:
-            print(f"Failed to send Telegram message: {response.text}")
-            return False
-
-    except Exception as e:
-        print(f"Exception occurred while sending Telegram message: {e}")
         return False
 
 
@@ -95,12 +65,12 @@ def handle_video_restoration(video: Video) -> bool:
     :return: True если сообщение отредактировано, False иначе
     """
 
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+    if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_CHAT_ID:
         print("Error: Telegram parameters not configured (token or chat ID)")
         return False
 
     try:
-        file_name = 'restored'
+        file_name = "restored"
 
         media = {
             "type": "document",
@@ -108,13 +78,18 @@ def handle_video_restoration(video: Video) -> bool:
         }
 
         payload = {
-            "chat_id": TELEGRAM_CHAT_ID,
+            "chat_id": settings.TELEGRAM_CHAT_ID,
             "message_id": video.message_id,
-            "media": json.dumps(media)
+            "media": json.dumps(media),
         }
 
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageMedia"
-        response = requests.post(url, data=payload, files={file_name: (file_name, io.BytesIO(video.id.encode()))})
+        url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/editMessageMedia"
+        response = requests.post(
+            url,
+            data=payload,
+            files={file_name: (file_name, io.BytesIO(video.id.encode()))},
+            timeout=60,
+        )
 
         if response.status_code == 200:
             print("Telegram message caption edited successfully.")
@@ -126,3 +101,26 @@ def handle_video_restoration(video: Video) -> bool:
     except Exception as e:
         print(f"Exception occurred while editing message caption: {e}")
         return False
+
+
+def get_telegram_chat_id() -> None:
+    """Получает ID чата в Telegram и сохраняет его в settings.conf"""
+    if not settings.TELEGRAM_BOT_TOKEN or settings.TELEGRAM_CHAT_ID:
+        return
+    try:
+        url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/getUpdates"
+        response = requests.get(url, timeout=60)
+        for event in response.json()["result"][::-1]:
+            if event_message := (
+                event.get("message") or event.get("channel_post") or event.get("my_chat_member")
+            ):
+                chat = event_message["chat"]
+                chat_id = str(chat["id"])
+                print(f"Found chat {chat['title']} with ID {chat_id}")
+                settings.TELEGRAM_CHAT_ID = chat_id
+                set_config_value("TELEGRAM_CHAT_ID", chat_id, docker=settings.DOCKER)
+                break
+        else:
+            print("Can't find chat ID, try sending any message to a channel")
+    except Exception as e:
+        print(f"Error occurred while getting Telegram chat ID: {e}")

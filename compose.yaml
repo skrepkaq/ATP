@@ -4,11 +4,8 @@ services:
     container_name: atp
     user: 1000:1000
     volumes:
-      - ./downloads:/app/downloads
-      - ./tiktok_videos.db:/app/tiktok_videos.db
-    env_file:
-      - .env
-      - .env-docker
+      - ./config:/config
+      - ./downloads:/downloads
     depends_on:
       browserless:
         condition: service_healthy
@@ -32,10 +29,6 @@ services:
     entrypoint: ["python", "-um", "atp.import_from_file"]
     user: 1000:1000
     volumes:
-      - ./downloads:/app/downloads
-      - ./tiktok_videos.db:/app/tiktok_videos.db
-      - ./user_data_tiktok.json:/app/user_data_tiktok.json:ro
-    env_file:
-      - .env
-      - .env-docker
+      - ./downloads:/downloads
+      - ./config:/config
     profiles: ["from-file"]

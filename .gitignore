@@ -198,3 +198,4 @@ downloads/*
 *.db
 user_data_tiktok.json
 result.json
+config/*

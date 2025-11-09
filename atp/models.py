@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Column, DateTime, Integer, String
 
@@ -24,17 +23,17 @@ class Video(Base):
     __tablename__ = "videos"
 
     id: str = Column(String, primary_key=True)
-    name: Optional[str] = Column(String, nullable=True)
+    name: str | None = Column(String, nullable=True)
     date: datetime = Column(DateTime, nullable=False)
     status: str = Column(String, nullable=False, default="new")
-    type: Optional[str] = Column(String, nullable=True)
-    author: Optional[str] = Column(String, nullable=True)  # автор видео
+    type: str | None = Column(String, nullable=True)
+    author: str | None = Column(String, nullable=True)  # автор видео
     created_at: datetime = Column(DateTime, default=lambda: datetime.now())
     updated_at: datetime = Column(
         DateTime, default=lambda: datetime.now(), onupdate=lambda: datetime.now()
     )
-    last_checked: Optional[datetime] = Column(DateTime, nullable=True)
-    message_id: Optional[int] = Column(Integer, nullable=True)
+    last_checked: datetime | None = Column(DateTime, nullable=True)
+    message_id: int | None = Column(Integer, nullable=True)
 
     def __repr__(self) -> str:
         """Строковое представление объекта Video.

@@ -11,6 +11,7 @@ import logging
 import os
 import shutil
 import subprocess
+from pathlib import Path
 
 from gallery_dl import config, job, output
 
@@ -19,7 +20,7 @@ from atp.settings import DOWNLOADS_DIR, TMP_DIR
 # Настройка gallery_dl
 config.load()
 config.set((), "directory", "")
-config.set(("extractor",), "base-directory", TMP_DIR)
+config.set(("extractor",), "base-directory", str(TMP_DIR))
 config.set(
     ("extractor", "tiktok"),
     "filename",
@@ -41,7 +42,7 @@ def render_slideshow() -> bool:
         print("No images were found")
         return False
 
-    audio_path = os.path.join(TMP_DIR, "audio.mp3")
+    audio_path = Path(TMP_DIR) / "audio.mp3"
     result = subprocess.run(
         [
             "ffprobe",
@@ -57,7 +58,8 @@ def render_slideshow() -> bool:
         stderr=subprocess.STDOUT,
     )
     if result.returncode != 0:
-        # Звук скорее всего доступен, попробуйте скачать видео заново, если ошибка остаётся, создайте issue
+        # Звук скорее всего доступен, попробуйте скачать видео заново
+        # Если ошибка остаётся, создайте issue
         print(f"Error downloading audio, try again: {result.stdout.decode('utf-8')}")
         return False
     sound_len = float(result.stdout)
@@ -87,7 +89,7 @@ def render_slideshow() -> bool:
         "-framerate",
         f"{input_fps}",
         "-i",
-        f"{TMP_DIR}/%01d.jpg",
+        TMP_DIR / "%01d.jpg",
         "-i",
         audio_path,
         "-vf",
@@ -98,24 +100,24 @@ def render_slideshow() -> bool:
         "aac",
         "-t",
         str(total_video_len),
-        f"{TMP_DIR}/output.mp4",
+        TMP_DIR / "output.mp4",
         "-loglevel",
         "error",
         "-y",
     ]
     subprocess.run(command)
 
-    return os.path.exists(os.path.join(TMP_DIR, "output.mp4"))
+    return (Path(TMP_DIR) / "output.mp4").exists()
 
 
 def download_slideshow(video_id: str) -> bool:
     print(f"Processing slideshow: {video_id}")
 
     # Очистка временной директории
-    if os.path.exists(TMP_DIR):
-        for file in os.listdir(TMP_DIR):
+    if TMP_DIR.exists():
+        for file in TMP_DIR.iterdir():
             try:
-                os.remove(os.path.join(TMP_DIR, file))
+                os.remove(TMP_DIR / file)
             except Exception as e:
                 print(f"Error deleting {file}: {e}")
     else:
@@ -134,8 +136,8 @@ def download_slideshow(video_id: str) -> bool:
 
     # Копирование результата в директорию загрузок
     os.makedirs(DOWNLOADS_DIR, exist_ok=True)
-    output_file_path = os.path.join(TMP_DIR, "output.mp4")
-    target_path = os.path.join(DOWNLOADS_DIR, f"{video_id}.mp4")
+    output_file_path = Path(TMP_DIR) / "output.mp4"
+    target_path = Path(DOWNLOADS_DIR) / f"{video_id}.mp4"
     shutil.copy(output_file_path, target_path)
     print(f"Slideshow saved: {video_id}.mp4")
     return True

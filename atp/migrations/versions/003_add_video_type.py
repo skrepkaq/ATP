@@ -5,8 +5,8 @@ Create Date: 2025-04-20
 
 """
 
-import os
 from datetime import datetime
+from pathlib import Path
 
 import sqlalchemy as sa
 from alembic import op
@@ -37,9 +37,7 @@ class TempVideo(Base):
     id = Column(String, primary_key=True)
     type = Column(String, nullable=True)
     status = Column(String, nullable=False, default="new")
-    updated_at = Column(
-        DateTime, default=lambda: datetime.now(), onupdate=lambda: datetime.now()
-    )
+    updated_at = Column(DateTime, default=lambda: datetime.now(), onupdate=lambda: datetime.now())
 
 
 def upgrade():
@@ -50,17 +48,13 @@ def upgrade():
 
     try:
         for video in (
-            session.query(TempVideo)
-            .filter(TempVideo.status.in_(("success", "deleted")))
-            .all()
+            session.query(TempVideo).filter(TempVideo.status.in_(("success", "deleted"))).all()
         ):
-            slideshow_path = os.path.join(DOWNLOADS_DIR, f"{video.id}_slideshow.mp4")
+            slideshow_path = Path(DOWNLOADS_DIR) / f"{video.id}_slideshow.mp4"
 
-            if os.path.exists(slideshow_path):
+            if slideshow_path.exists():
                 video.type = "slideshow"
-                os.rename(
-                    slideshow_path, os.path.join(DOWNLOADS_DIR, f"{video.id}.mp4")
-                )
+                slideshow_path.rename(Path(DOWNLOADS_DIR) / f"{video.id}.mp4")
             else:
                 video.type = "video"
 

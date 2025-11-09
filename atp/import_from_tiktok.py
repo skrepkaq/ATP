@@ -12,14 +12,12 @@ import math
 
 from playwright.async_api import async_playwright
 from TikTokApi import TikTokApi
-from TikTokApi.exceptions import EmptyResponseException, InvalidResponseException
 from TikTokApi.helpers import random_choice
 
 from atp import crud
 from atp.database import get_db_session
 from atp.download import download
 from atp.settings import BROWSERLESS_URL, TIKTOK_USER
-from atp.telegram_notifier import send_message
 
 
 class CDPTikTokApi(TikTokApi):
@@ -33,7 +31,7 @@ class CDPTikTokApi(TikTokApi):
         proxies=None,
         sleep_after=1,
         starting_url="https://www.tiktok.com",
-        context_options={},
+        context_options=None,
         cookies=None,
         suppress_resource_load_types=None,
         timeout=30000,
@@ -41,6 +39,7 @@ class CDPTikTokApi(TikTokApi):
         """
         Расширяет TikTokApi.create_sessions с поддержкой connect_over_cdp.
         """
+        context_options = context_options or {}
         self.playwright = await async_playwright().start()
         self.browser = await self.playwright.chromium.connect_over_cdp(
             cdp_url + '?launch={"stealth": true}'
@@ -73,15 +72,12 @@ async def import_from_tiktok() -> None:
         # (дольше и только лайкнутые без сохранённых)
         return
 
-    video_ids: set[str] = set(v.id for v in videos)
+    video_ids: set[str] = {v.id for v in videos}
 
     try:
         async with CDPTikTokApi() as api:
             await api.create_sessions(
-                cdp_url=BROWSERLESS_URL,
-                ms_tokens=[None],
-                num_sessions=1,
-                sleep_after=3
+                cdp_url=BROWSERLESS_URL, ms_tokens=[None], num_sessions=1, sleep_after=3
             )
 
             new_videos: list[str] = []

@@ -39,9 +39,7 @@ def add_videos_bulk(db: Session, videos: list[dict[str, str | datetime]]) -> Non
     db.commit()
 
 
-def update_video_status(
-    db: Session, video_id: str, status: str, name: str | None = None
-) -> bool:
+def update_video_status(db: Session, video_id: str, status: str, name: str | None = None) -> bool:
     """Обновляет статус видео в базе данных.
 
     :param db: Сессия базы данных

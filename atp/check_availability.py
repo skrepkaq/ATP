@@ -15,10 +15,7 @@ from atp import crud
 from atp.database import get_db_session
 from atp.models import Video
 from atp.settings import CHECK_INTERVAL_DAYS
-from atp.telegram_notifier import (
-    handle_video_restoration,
-    send_video_deleted_notification,
-)
+from atp.telegram_notifier import handle_video_restoration, send_video_deleted_notification
 from atp.ytdlp import NetworkError, check_video_availability
 
 

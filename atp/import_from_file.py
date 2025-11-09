@@ -25,7 +25,7 @@ def load_videos_from_file(file: str) -> list[dict[str, str | datetime]] | None:
 
     :return: Список словарей с информацией о видео
     """
-    with open(file, "r", encoding="utf-8") as f:
+    with open(file, encoding="utf-8") as f:
         data = json.load(f)
 
     try:
@@ -37,7 +37,7 @@ def load_videos_from_file(file: str) -> list[dict[str, str | datetime]] | None:
             data["Your Activity"]["Like List"]["ItemFavoriteList"]
             if IMPORT_LIKED_VIDEOS
             else []
-        )
+        )  # fmt: skip
     except (KeyError, TypeError) as e:
         print(f"JSON error: {e}")
         return None

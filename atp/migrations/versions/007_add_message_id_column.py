@@ -26,7 +26,7 @@ def load_messages():
     if not os.path.exists(TELEGRAM_MESSAGES_FILE):
         print(f"File {TELEGRAM_MESSAGES_FILE} does not exist")
         return []
-    with open(TELEGRAM_MESSAGES_FILE, "r") as f:
+    with open(TELEGRAM_MESSAGES_FILE) as f:
         data = json.load(f)
         messages = []
         for message in data["messages"]:
@@ -36,16 +36,10 @@ def load_messages():
                 )
                 lines = message_text.strip().split("\n")
                 if len(lines) >= 1:
-                    if len(lines) >= 3:
-                        video_name = lines[1]
-                    else:
-                        video_name = lines[0]
+                    video_name = lines[1] if len(lines) >= 3 else lines[0]
                     if not video_name:
                         continue
-                    messages.append({
-                        "id": message["id"],
-                        "text": video_name
-                    })
+                    messages.append({"id": message["id"], "text": video_name})
         return messages
 
 
@@ -62,7 +56,8 @@ def upgrade():
 
     for message in messages:
         matched_videos = [
-            video for video in videos
+            video
+            for video in videos
             if (video.name.strip() if video.name else "") == message["text"].strip()
         ]
         if len(matched_videos) == 1:

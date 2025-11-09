@@ -15,8 +15,10 @@ RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-dev --compile-bytecode
 
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH" \
+    DOCKER=1
 
+COPY example.settings.conf example.settings-docker.conf ./
 COPY atp/ atp/
 COPY entrypoint.py .
 

@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 from alembic import command
 from alembic import config as alembic_config
@@ -28,7 +28,7 @@ def run_migrations() -> None:
     доступные миграции до последней версии.
     """
     alembic_cfg = alembic_config.Config(
-        os.path.join(os.path.dirname(__file__), "alembic.ini"),
+        Path(__file__).parent / "alembic.ini",
         config_args={"sqlalchemy.url": DATABASE_URL},
     )
     command.upgrade(alembic_cfg, "head")

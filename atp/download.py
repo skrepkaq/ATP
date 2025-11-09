@@ -15,7 +15,7 @@ from atp.ytdlp import download_video
 
 
 def download() -> None:
-    """ Скачивает новые видео TikTok"""
+    """Скачивает новые видео TikTok"""
     os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
     db = get_db_session()

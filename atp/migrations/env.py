@@ -14,8 +14,8 @@ root_dir = os.path.dirname(parent_dir)  # project root
 sys.path.insert(0, root_dir)
 
 # Import models
-import atp.models  # noqa: F401 - import needed for side effects
-from atp.database import Base
+import atp.models  # noqa: F401, E402 - import needed for side effects
+from atp.database import Base  # noqa: E402
 
 # This is the Alembic Config object
 config = context.config
