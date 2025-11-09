@@ -117,6 +117,7 @@ def download_video(db: Session, video_id: str) -> bool | None:
                 video.type = "slideshow"
             else:
                 video.status = "new"
+                info = False
             db.commit()
     return bool(info)
 
