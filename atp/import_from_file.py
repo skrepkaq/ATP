@@ -29,12 +29,13 @@ def load_videos_from_file(file: str) -> list[dict[str, str | datetime]] | None:
         data = json.load(f)
 
     try:
+        activity = data.get("Likes and Favorites") or data.get("Your Activity")
         videos_raw = (
-            data["Your Activity"]["Favorite Videos"]["FavoriteVideoList"]
+            activity["Favorite Videos"]["FavoriteVideoList"]
             if IMPORT_FAVORITE_VIDEOS
             else []
         ) + (
-            data["Your Activity"]["Like List"]["ItemFavoriteList"]
+            activity["Like List"]["ItemFavoriteList"]
             if IMPORT_LIKED_VIDEOS
             else []
         )  # fmt: skip
