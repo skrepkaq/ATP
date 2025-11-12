@@ -118,7 +118,7 @@ def get_telegram_chat_id() -> None:
                 chat_id = str(chat["id"])
                 print(f"Found chat {chat['title']} with ID {chat_id}")
                 settings.TELEGRAM_CHAT_ID = chat_id
-                set_config_value("TELEGRAM_CHAT_ID", chat_id, docker=settings.DOCKER)
+                set_config_value("TELEGRAM_CHAT_ID", chat_id)
                 break
         else:
             print("Can't find chat ID, try sending any message to a channel")

@@ -8,7 +8,7 @@ from atp.config_init import initialize_config
 
 # Инициализируем конфигурацию при импорте модуля
 DOCKER = os.getenv("DOCKER", "0") == "1"
-config_dir = initialize_config(docker=DOCKER)
+config_dir = initialize_config()
 settings_file = config_dir / "settings.conf"
 docker_settings_file = config_dir / "settings-docker.conf"
 
@@ -52,8 +52,11 @@ CHECK_INTERVAL_DAYS: int = int(os.getenv("CHECK_INTERVAL_DAYS", "7"))
 IMPORT_LIKED_VIDEOS: bool = os.getenv("IMPORT_LIKED_VIDEOS", "true").lower() == "true"
 IMPORT_FAVORITE_VIDEOS: bool = os.getenv("IMPORT_FAVORITE_VIDEOS", "true").lower() == "true"
 
+# Пытаться скачать failed видео, вдруг их восстановили
+HOPE_MODE: bool = os.getenv("HOPE_MODE", "false").lower() == "true"
+
 # Настройки временных директорий
 TMP_DIR: Path = Path(tempfile.gettempdir()) / "gallery_dl"
 
 # Настройки для retry логики
-MAX_RETRIES: int = 3
+MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "3"))

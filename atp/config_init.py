@@ -5,9 +5,12 @@
 при первом запуске приложения.
 """
 
+import os
 import re
 import shutil
 from pathlib import Path
+
+DOCKER: bool = os.getenv("DOCKER", "0") == "1"
 
 
 def _get_project_root() -> Path:
@@ -21,7 +24,7 @@ def _get_project_root() -> Path:
     return Path(__file__).parent.parent
 
 
-def get_config_dir(docker: bool = False) -> Path:
+def get_config_dir() -> Path:
     """Определяет путь к директории конфигурации.
 
     Проверяет наличие /config, если существует - использует его
@@ -30,12 +33,12 @@ def get_config_dir(docker: bool = False) -> Path:
 
     :return: Путь к директории конфигурации
     """
-    if docker:
+    if DOCKER:
         return Path("/config")
     return _get_project_root() / "config"
 
 
-def initialize_config(docker: bool = False) -> Path:
+def initialize_config() -> Path:
     """Инициализирует директорию конфигурации.
 
     Создаёт директорию config, если её нет, и копирует
@@ -43,7 +46,7 @@ def initialize_config(docker: bool = False) -> Path:
 
     :return: Путь к директории конфигурации
     """
-    config_dir = get_config_dir(docker)
+    config_dir = get_config_dir()
     config_dir.mkdir(parents=True, exist_ok=True)
 
     init = False
@@ -53,6 +56,7 @@ def initialize_config(docker: bool = False) -> Path:
         if not settings_path.exists() and example_path.exists():
             shutil.copy2(example_path, settings_path)
             init = True
+    upgrade_config()
     if init:
         print(
             f"Created {settings_path} from example. "
@@ -66,13 +70,13 @@ def initialize_config(docker: bool = False) -> Path:
     return config_dir
 
 
-def set_config_value(key: str, value: str, docker: bool) -> None:
+def set_config_value(key: str, value: str) -> None:
     """Устанавливает значение в settings.conf.
 
     :param key: Ключ
     :param value: Значение
     """
-    config_dir = get_config_dir(docker=docker)
+    config_dir = get_config_dir()
     settings_file = config_dir / "settings.conf"
     with open(settings_file, "r+") as f:
         config = f.read()
@@ -80,3 +84,40 @@ def set_config_value(key: str, value: str, docker: bool) -> None:
         f.seek(0)
         f.write(config)
         f.truncate()
+
+
+def get_config_version() -> int:
+    """Получает версию конфигурации из settings.conf."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+    with open(settings_file) as f:
+        config = f.read()
+        return int(re.search(r"CONFIG_VERSION=(\d+)", config).group(1))
+
+
+def version_2() -> None:
+    """Обновляет конфигурацию до версии 2."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+    with open(settings_file, "a") as f:
+        f.write(
+            "\n# Пытаться скачать failed видео, вдруг их восстановили. "
+            "Советую поставить MAX_RETRIES=1"
+            "\nHOPE_MODE=false"
+            "\nMAX_RETRIES=3\n"
+        )
+
+
+VERSIONS = [
+    None,
+    version_2,
+]
+
+
+def upgrade_config() -> None:
+    """Обновляет конфигурацию до последней версии."""
+    config_version = get_config_version()
+    for i in range(config_version, len(VERSIONS)):
+        print(f"Upgrading config to version {i + 1}...")
+        VERSIONS[i]()
+        set_config_value("CONFIG_VERSION", str(i + 1))
