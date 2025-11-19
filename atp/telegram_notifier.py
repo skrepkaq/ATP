@@ -116,7 +116,8 @@ def get_telegram_chat_id() -> None:
             ):
                 chat = event_message["chat"]
                 chat_id = str(chat["id"])
-                print(f"Found chat {chat['title']} with ID {chat_id}")
+                title = chat.get("title") or chat.get("username")
+                print(f"Found chat {title} with ID {chat_id}")
                 settings.TELEGRAM_CHAT_ID = chat_id
                 set_config_value("TELEGRAM_CHAT_ID", chat_id)
                 break
