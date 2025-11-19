@@ -123,5 +123,23 @@ def get_telegram_chat_id() -> None:
                 break
         else:
             print("Can't find chat ID, try sending any message to a channel")
+            return
+        url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage"
+        response = requests.post(
+            url,
+            data={"chat_id": chat_id, "text": "Удаленные видео будут публиковаться в этом чате"},
+            timeout=60,
+        )
+        if response.status_code == 200:
+            print("Message sent successfully.")
+        else:
+            print(
+                f"Failed to send message to chat {title} with ID {chat_id}. Check bot permissions."
+            )
+            settings.TELEGRAM_CHAT_ID = None
+            set_config_value("TELEGRAM_CHAT_ID", "")
+
     except Exception as e:
         print(f"Error occurred while getting Telegram chat ID: {e}")
+        settings.TELEGRAM_CHAT_ID = None
+        set_config_value("TELEGRAM_CHAT_ID", "")
