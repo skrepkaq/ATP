@@ -18,7 +18,7 @@ from atp.download import download
 from atp.settings import IMPORT_FAVORITE_VIDEOS, IMPORT_LIKED_VIDEOS, TIKTOK_DATA_FILE
 
 
-def load_videos_from_file(file: str) -> list[dict[str, str | datetime]] | None:
+def load_videos_from_file(file: str) -> list[dict[str, datetime]] | None:
     """Загружает список видео из JSON-файла экспорта TikTok.
 
     :param file: Путь к JSON-файлу с данными экспорта
@@ -43,7 +43,7 @@ def load_videos_from_file(file: str) -> list[dict[str, str | datetime]] | None:
         print(f"JSON error: {e}")
         return None
 
-    videos: list[dict[str, str | datetime]] = []
+    videos: list[dict[str, datetime]] = []
     ids: set[str] = set()
     for video in videos_raw:
         date_str = video.get("date") or video["Date"]

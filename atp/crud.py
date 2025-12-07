@@ -24,7 +24,7 @@ def add_video_to_db(db: Session, video_id: str, date: datetime) -> Video:
     return db_video
 
 
-def add_videos_bulk(db: Session, videos: list[dict[str, str | datetime]]) -> None:
+def add_videos_bulk(db: Session, videos: list[dict[str, datetime]]) -> None:
     """Добавляет список видео в базу данных.
 
     :param db: Сессия базы данных
