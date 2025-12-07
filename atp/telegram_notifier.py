@@ -31,13 +31,17 @@ def send_video_deleted_notification(video: Video) -> bool:
 
     try:
         with open(video_path, "rb") as video_file:
+            MAX_LENGHT = 1024
+            author = video.author + "\n" if video.author else ""
+            cut_name = video.name
+            total_length = len(author) + len(video.name) + 11
+            if total_length > MAX_LENGHT:
+                diff = total_length - MAX_LENGHT
+                cut_name = video.name[: -diff - 3] + "..."
             files = {"video": video_file}
             data = {
                 "chat_id": settings.TELEGRAM_CHAT_ID,
-                "caption": (
-                    f"{video.author + '\n' if video.author else ''}"
-                    f"{video.name}\n{video.date.strftime('%d.%m.%Y')}"
-                ),
+                "caption": author + cut_name + "\n" + video.date.strftime("%d.%m.%Y"),
                 "supports_streaming": True,
             }
             url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendVideo"
