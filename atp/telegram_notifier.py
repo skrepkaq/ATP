@@ -4,6 +4,7 @@
 
 import io
 import json
+import random
 from pathlib import Path
 
 import requests
@@ -61,8 +62,8 @@ def send_video_deleted_notification(video: Video) -> bool:
 
 
 def handle_video_restoration(video: Video) -> bool:
-    """Заменяет видео в сообщении на пустой файл.
-    Telegram не даёт удалить сообщение старше 48 часов, поэтому заменяем видео на пустой файл.
+    """Заменяет видео в сообщении на BMP картинку.
+    Telegram не даёт удалить сообщение старше 48 часов, поэтому заменяем видео на BMP файл.
 
     :param video: Объект видео из базы данных
 
@@ -74,11 +75,19 @@ def handle_video_restoration(video: Video) -> bool:
         return False
 
     try:
+        random.seed(video.id)
+        color = [0, random.randint(0, 255), 255]
+        random.shuffle(color)
+
+        base_bmp_hex = "424d1e000000000000001a0000000c0000000100010001001800"
+        bmp_data = bytes.fromhex(base_bmp_hex) + bytes(color) + b"\x00"
         file_name = "restored"
 
         media = {
-            "type": "document",
+            "type": "photo",
             "media": f"attach://{file_name}",
+            "parse_mode": "Markdown",
+            "caption": f"[Видео](https://tiktok.com/@/video/{video.id}) было восстановлено!",
         }
 
         payload = {
@@ -91,19 +100,19 @@ def handle_video_restoration(video: Video) -> bool:
         response = requests.post(
             url,
             data=payload,
-            files={file_name: (file_name, io.BytesIO(video.id.encode()))},
+            files={file_name: (file_name, io.BytesIO(bmp_data))},
             timeout=60,
         )
 
         if response.status_code == 200:
-            print("Telegram message caption edited successfully.")
+            print("Telegram message media edited successfully.")
             return True
         else:
-            print(f"Failed to edit Telegram message caption: {response.text}")
+            print(f"Failed to edit Telegram message media: {response.text}")
             return False
 
     except Exception as e:
-        print(f"Exception occurred while editing message caption: {e}")
+        print(f"Exception occurred while editing message media: {e}")
         return False
 
 
