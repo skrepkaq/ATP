@@ -52,20 +52,22 @@ def check_video_batch() -> None:
             if available:
                 if video.status == "deleted":
                     print(f"Video {video.id} has been restored!")
+                    restored_count += 1
                     if video.message_id:
                         print(f"Deleting message {video.message_id}")
-                        handle_video_restoration(video)
+                        if not handle_video_restoration(video):
+                            continue
                     crud.update_video_message_id(db, video.id, None)
                     crud.update_video_status(db, video.id, "success")
-                    restored_count += 1
             elif video.status == "success":
                 print(f"Video {video.id} is no longer available!")
-
-                if msg_id := send_video_deleted_notification(video):
-                    crud.update_video_message_id(db, video.id, msg_id)
-                    crud.update_video_status(db, video.id, "deleted")
-
                 unavailable_count += 1
+
+                if not (msg_id := send_video_deleted_notification(video)):
+                    continue
+                crud.update_video_message_id(db, video.id, msg_id)
+                crud.update_video_status(db, video.id, "deleted")
+
             crud.update_video_last_checked(db, video.id)
 
         print(f"Checked {len(videos)} videos")
