@@ -79,10 +79,13 @@ def set_config_value(key: str, value: str) -> None:
     config_dir = get_config_dir()
     settings_file = config_dir / "settings.conf"
     with open(settings_file, "r+") as f:
-        config = f.read()
-        config = re.sub(rf"{key}=.*", f"{key}={value}", config)
+        config = f.readlines()
+        for i, line in enumerate(config):
+            if line.startswith(key):
+                config[i] = f"{key}={value}\n"
+                break
         f.seek(0)
-        f.write(config)
+        f.writelines(config)
         f.truncate()
 
 
