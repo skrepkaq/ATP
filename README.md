@@ -86,7 +86,13 @@ docker compose up -d
 
 Как-то запустите browserless/chromium. Можно в докере, только его:
 
-1. Раскомментируйте ports в compose.yaml
+1. Добавьте порты в compose.yaml для сервиса browserless:
+```yaml
+  browserless:
+    # ... другие настройки
+    ports:
+      - "3000:3000"
+```
 2. ```docker compose up -d browserless```
 3. Запустите проект
 

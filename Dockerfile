@@ -5,9 +5,10 @@ RUN apt update && apt install -y --no-install-recommends \
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
 
+RUN groupadd -g 1000 atp \
+    && useradd -u 1000 -g 1000 -m atp
 
 WORKDIR /app
-RUN chown -R 1000:1000 /app
 
 RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
     --mount=type=cache,target=/root/.cache/uv \
@@ -18,8 +19,10 @@ RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
 ENV PATH="/app/.venv/bin:$PATH" \
     DOCKER=1
 
-COPY example.settings.conf example.settings-docker.conf ./
-COPY atp/ atp/
-COPY entrypoint.py .
+COPY --chown=atp:atp example.settings.conf example.settings-docker.conf ./
+COPY --chown=atp:atp atp/ atp/
+COPY --chown=atp:atp entrypoint.py .
+
+USER atp
 
 ENTRYPOINT ["python", "-u", "entrypoint.py"]

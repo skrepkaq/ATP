@@ -2,7 +2,6 @@ services:
   atp:
     image: skrepkaq/atp
     container_name: atp
-    user: 1000:1000
     volumes:
       - ./config:/config
       - ./downloads:/downloads
@@ -14,8 +13,6 @@ services:
     image: ghcr.io/browserless/chromium:v2.31.0
     container_name: atp-browserless
     attach: false
-    # ports:
-    #   - "3000:3000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/docs"]
       interval: 2s
@@ -27,8 +24,7 @@ services:
     image: skrepkaq/atp
     container_name: atp-from-file
     entrypoint: ["python", "-um", "atp.import_from_file"]
-    user: 1000:1000
     volumes:
-      - ./downloads:/downloads
       - ./config:/config
+      - ./downloads:/downloads
     profiles: ["from-file"]
