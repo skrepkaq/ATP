@@ -54,9 +54,7 @@ def yt_dlp_request(ydl_opts: dict[str, any], video_id: str, download: bool) -> d
     for attempt in range(MAX_RETRIES):
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                return ydl.extract_info(
-                    f"https://www.tiktokv.com/share/video/{video_id}/", download
-                )
+                return ydl.extract_info(f"https://www.tiktok.com/@/video/{video_id}", download)
         except Exception as e:
             exc = e
             error_msg = str(e)
