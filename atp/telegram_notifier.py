@@ -34,11 +34,11 @@ def send_video_deleted_notification(video: Video) -> bool:
         with open(video_path, "rb") as video_file:
             MAX_LENGHT = 1024
             author = video.author + "\n" if video.author else ""
-            cut_name = video.name
-            total_length = len(author) + len(video.name) + 11
+            cut_name = video.name or ""
+            total_length = len(author) + len(cut_name) + 11
             if total_length > MAX_LENGHT:
                 diff = total_length - MAX_LENGHT
-                cut_name = video.name[: -diff - 3] + "..."
+                cut_name = cut_name[: -diff - 3] + "..."
             files = {"video": video_file}
             data = {
                 "chat_id": settings.TELEGRAM_CHAT_ID,
