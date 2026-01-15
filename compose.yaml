@@ -5,20 +5,6 @@ services:
     volumes:
       - ./config:/config
       - ./downloads:/downloads
-    depends_on:
-      browserless:
-        condition: service_healthy
-    restart: unless-stopped
-  browserless:
-    image: ghcr.io/browserless/chromium:v2.31.0
-    container_name: atp-browserless
-    attach: false
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/docs"]
-      interval: 2s
-      timeout: 2s
-      retries: 3
-      start_period: 2s
     restart: unless-stopped
   atp-from-file:
     image: skrepkaq/atp
