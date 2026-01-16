@@ -41,9 +41,6 @@ TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
 DOWNLOAD_FROM_TIKTOK: bool = os.getenv("DOWNLOAD_FROM_TIKTOK", "true").lower() == "true"
 TIKTOK_USER: str = os.getenv("TIKTOK_USER", "")
 
-# Настройки browserless
-BROWSERLESS_URL: str = os.getenv("BROWSERLESS_URL", "ws://localhost:3000")
-
 # Настройки проверки доступности
 CHECK_INTERVAL_DAYS: int = int(os.getenv("CHECK_INTERVAL_DAYS", "7"))
 

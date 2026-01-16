@@ -111,9 +111,29 @@ def version_2() -> None:
         )
 
 
+def version_3() -> None:
+    """Обновляет конфигурацию до версии 3."""
+    config_dir = get_config_dir()
+    REMOVE_LINES = [
+        "# Настройки browserless",
+        "BROWSERLESS_URL",
+    ]
+    for settings_file in ["settings-docker.conf", "settings.conf"]:
+        settings_path = config_dir / settings_file
+        if settings_path.exists():
+            with open(settings_path, "r+") as f:
+                config = f.readlines()
+                for remove_line in REMOVE_LINES:
+                    config = [line for line in config if not line.startswith(remove_line)]
+                f.seek(0)
+                f.writelines(config)
+                f.truncate()
+
+
 VERSIONS = [
     None,
     version_2,
+    version_3,
 ]
 
 
