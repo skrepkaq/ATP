@@ -59,4 +59,11 @@ TIKTOK_DATA_FILE: str = os.getenv("TIKTOK_DATA_FILE", "user_data_tiktok.json")
 if not os.path.isabs(TIKTOK_DATA_FILE):
     TIKTOK_DATA_FILE = str(config_dir / TIKTOK_DATA_FILE)
 
+# Файл с cookies в формате Netscape для yt-dlp
+COOKIES_FILE: str | None = os.getenv("COOKIES_FILE", "cookies.txt")
+if not os.path.isabs(COOKIES_FILE):
+    COOKIES_FILE = str(config_dir / COOKIES_FILE)
+    if not os.path.exists(COOKIES_FILE):
+        COOKIES_FILE = None
+
 TMP_DIR: Path = Path(tempfile.gettempdir()) / "gallery_dl"

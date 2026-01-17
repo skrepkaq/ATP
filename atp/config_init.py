@@ -138,11 +138,20 @@ def version_4() -> None:
         f.write("\n# Пытаться обойти анти-бот защиту тиктока\nANTI_BOT_BYPASS=false\n")
 
 
+def version_5() -> None:
+    """Обновляет конфигурацию до версии 5."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+    with open(settings_file, "a") as f:
+        f.write("\nCOOKIES_FILE=cookies.txt\n")
+
+
 VERSIONS = [
     None,
     version_2,
     version_3,
     version_4,
+    version_5,
 ]
 
 

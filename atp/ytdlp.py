@@ -19,7 +19,7 @@ from yt_dlp.extractor.tiktok import TikTokIE, TikTokUserIE
 from yt_dlp.utils import ExtractorError, traverse_obj
 
 from atp.models import Video
-from atp.settings import ANTI_BOT_BYPASS, DOWNLOADS_DIR, MAX_RETRIES
+from atp.settings import ANTI_BOT_BYPASS, COOKIES_FILE, DOWNLOADS_DIR, MAX_RETRIES
 from atp.slideshow import download_slideshow
 
 
@@ -132,7 +132,7 @@ class TikTokLikedIE(TikTokUserIE):
                 expected=True,
             )
 
-        if not traverse_obj(detail, ("userInfo", "user", "openFavorite", {bool})):
+        if not traverse_obj(detail, ("userInfo", "stats", "diggCount", {int})):
             raise ExtractorError(
                 "This user's liked videos are not open to the public. "
                 "Open it or log into this account",
@@ -177,6 +177,9 @@ def yt_dlp_request(
         "Unable to extract webpage video data",
         "Unsupported URL",
     ]
+    if COOKIES_FILE and username:
+        # используем cookies только где это необходимо, для импорта лайков
+        ydl_opts["cookiefile"] = COOKIES_FILE
     if ANTI_BOT_BYPASS:
         ydl_opts["http_headers"] = {
             "User-Agent": "hi mom!"
