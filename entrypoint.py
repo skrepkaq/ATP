@@ -1,4 +1,3 @@
-import asyncio
 import time
 
 import schedule
@@ -17,7 +16,7 @@ schedule.every().hour.at("00:00").do(check_video_batch)
 
 if DOWNLOAD_FROM_TIKTOK:
     # Импорт лайкнутых видео из tiktok
-    schedule.every().hour.at("30:00").do(lambda: asyncio.run(import_from_tiktok()))
+    schedule.every().hour.at("30:00").do(import_from_tiktok)
 
 
 if __name__ == "__main__":

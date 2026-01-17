@@ -1,6 +1,6 @@
 [project]
 name = "atp"
-version = "1.2.8"
+version = "1.3.0"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.15.2",
@@ -9,7 +9,6 @@ dependencies = [
     "requests>=2.32.3",
     "schedule>=1.2.2",
     "sqlalchemy>=2.0.40",
-    "tiktokapi>=7.1.0",
     "yt-dlp[curl-cffi]>=2025.10.14",
 ]
 
