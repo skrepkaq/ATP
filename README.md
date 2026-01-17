@@ -35,7 +35,7 @@ docker compose up atp-from-file
 - Установите `ffmpeg`
 - Запустите импорт
 ```bash
-python -m atp.import_from_file
+python3 -m atp.import_from_file
 ```
 4. При первом запуске приложение автоматически создаст директорию `config/` и скопирует примеры конфигурационных файлов:
    - `config/settings.conf` - основные настройки
@@ -84,20 +84,8 @@ docker compose up -d
 
 ### Запуск без Docker
 
-Как-то запустите browserless/chromium. Можно в докере, только его:
-
-1. Добавьте порты в compose.yaml для сервиса browserless:
-```yaml
-  browserless:
-    # ... другие настройки
-    ports:
-      - "3000:3000"
-```
-2. ```docker compose up -d browserless```
-3. Запустите проект
-
 ```bash
-python entrypoint.py
+python3 entrypoint.py
 ```
 
 ## Готово!
