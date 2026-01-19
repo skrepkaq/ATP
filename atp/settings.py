@@ -44,6 +44,9 @@ HOPE_MODE: bool = os.getenv("HOPE_MODE", "false").lower() == "true"
 # Количество попыток при скачивании/проверке видео
 MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "3"))
 
+# Пытаться обойти анти-бот защиту тиктока
+ANTI_BOT_BYPASS: bool = os.getenv("ANTI_BOT_BYPASS", "false").lower() == "true"
+
 # Настройки папок и базы
 DATABASE_FILE = os.getenv("DATABASE", "tiktok_videos.db")
 if not os.path.isabs(DATABASE_FILE):

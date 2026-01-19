@@ -130,10 +130,19 @@ def version_3() -> None:
                 f.truncate()
 
 
+def version_4() -> None:
+    """Обновляет конфигурацию до версии 4."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+    with open(settings_file, "a") as f:
+        f.write("\n# Пытаться обойти анти-бот защиту тиктока\nANTI_BOT_BYPASS=false\n")
+
+
 VERSIONS = [
     None,
     version_2,
     version_3,
+    version_4,
 ]
 
 

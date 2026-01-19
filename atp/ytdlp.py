@@ -19,7 +19,7 @@ from yt_dlp.extractor.tiktok import TikTokIE, TikTokUserIE
 from yt_dlp.utils import ExtractorError, traverse_obj
 
 from atp.models import Video
-from atp.settings import DOWNLOADS_DIR, MAX_RETRIES
+from atp.settings import ANTI_BOT_BYPASS, DOWNLOADS_DIR, MAX_RETRIES
 from atp.slideshow import download_slideshow
 
 
@@ -177,6 +177,10 @@ def yt_dlp_request(
         "Unable to extract webpage video data",
         "Unsupported URL",
     ]
+    if ANTI_BOT_BYPASS:
+        ydl_opts["http_headers"] = {
+            "User-Agent": "hi mom!"
+        }  # передаём привет маме создателя анти-бот защиты (хз как, но пока это работает)
 
     is_network_error = False
     exc = None
@@ -199,7 +203,10 @@ def yt_dlp_request(
 
     # Если достигли максимального количества попыток или не сетевая ошибка
     if is_network_error:
-        print("Network error detected, skipping")
+        print(
+            "Network error detected, skipping\n"
+            f"Try to {'disable' if ANTI_BOT_BYPASS else 'enable'} ANTI_BOT_BYPASS in settings.conf"
+        )
         raise NetworkError
     else:
         raise exc
