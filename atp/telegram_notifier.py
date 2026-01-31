@@ -123,6 +123,9 @@ def get_telegram_chat_id() -> None:
     try:
         url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/getUpdates"
         response = requests.get(url, timeout=60)
+        if response.status_code != 200:
+            print(f"Failed to get Telegram chat ID: {response.text}")
+            return
         for event in response.json()["result"][::-1]:
             if event_message := (
                 event.get("message") or event.get("channel_post") or event.get("my_chat_member")
