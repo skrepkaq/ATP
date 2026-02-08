@@ -22,6 +22,8 @@ from atp.models import Video
 from atp.settings import ANTI_BOT_BYPASS, COOKIES_FILE, DOWNLOADS_DIR, MAX_RETRIES
 from atp.slideshow import download_slideshow
 
+COOKIE_ERROR = "Log in for access"
+
 
 class TikTokLikedIE(TikTokUserIE):
     IE_NAME = "tiktok:liked"
@@ -148,6 +150,17 @@ class NetworkError(Exception):
     pass
 
 
+def get_error_message(e: Exception) -> str:
+    if hasattr(e, "orig_msg"):
+        return e.orig_msg
+    if exc_info := getattr(e, "exc_info", None):
+        if error := exc_info[1]:
+            if hasattr(error, "orig_msg"):
+                return error.orig_msg
+            return str(error)
+    return str(e)
+
+
 def yt_dlp_request(
     ydl_opts: dict[str, any],
     video_id: str | None = None,
@@ -177,17 +190,19 @@ def yt_dlp_request(
         "Unable to extract webpage video data",
         "Unsupported URL",
     ]
-    if COOKIES_FILE and username:
-        # используем cookies только где это необходимо, для импорта лайков
-        ydl_opts["cookiefile"] = COOKIES_FILE
+    use_cookies = bool(username)
     if ANTI_BOT_BYPASS:
         ydl_opts["http_headers"] = {
             "User-Agent": "hi mom!"
         }  # передаём привет маме создателя анти-бот защиты (хз как, но пока это работает)
 
     is_network_error = False
-    exc = None
-    for attempt in range(MAX_RETRIES):
+    last_exception = None
+    attempt = 0
+    while attempt < MAX_RETRIES:
+        if COOKIES_FILE and use_cookies:
+            # используем cookies только когда это необходимо
+            ydl_opts["cookiefile"] = COOKIES_FILE
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 if video_id:
@@ -195,14 +210,22 @@ def yt_dlp_request(
                 elif username:
                     return TikTokLikedIE(ydl).extract(f"tiktokliked:{username}/liked")
         except Exception as e:
-            exc = e
-            error_msg = str(e)
+            last_exception = e
+            error_msg = get_error_message(e)
+            is_network_error = any(err in str(e) for err in network_errors)
+            is_cookies_error = COOKIE_ERROR in error_msg
+
+            if is_cookies_error and COOKIES_FILE and not use_cookies:
+                # если ошибка из-за логина, добавляем cookies и пробуем снова не тратя attempt
+                use_cookies = True
+                continue
+
             print(
-                f"Error checking {'video' if video_id else 'user'} {video_id or username} "
-                f"attempt {attempt + 1}/{MAX_RETRIES}): {e}"
+                f"Error requesting {'video' if video_id else 'user'} {video_id or username} "
+                f"(attempt {attempt + 1}/{MAX_RETRIES}): {error_msg}"
             )
 
-            is_network_error = any(err in error_msg for err in network_errors)
+            attempt += 1
 
     # Если достигли максимального количества попыток или не сетевая ошибка
     if is_network_error:
@@ -212,7 +235,7 @@ def yt_dlp_request(
         )
         raise NetworkError
     else:
-        raise exc
+        raise last_exception
 
 
 def download_video(db: Session, video_id: str) -> bool | None:
@@ -230,12 +253,14 @@ def download_video(db: Session, video_id: str) -> bool | None:
         "no_warnings": False,
     }
 
+    error_msg = None
     try:
         info = yt_dlp_request(ydl_opts, video_id=video_id, download=True)
     except NetworkError:
         return None
     except Exception as e:
-        print(f"Error downloading video {video_id}: {e}")
+        error_msg = get_error_message(e)
+        print(f"Error downloading video {video_id}: {error_msg}")
         info = False
 
     video: Video = db.query(Video).filter(Video.id == video_id).first()
@@ -249,6 +274,9 @@ def download_video(db: Session, video_id: str) -> bool | None:
         if info and info.get("uploader") and not video.author:
             video.author = info["uploader"]
 
+        if error_msg:
+            video.deleted_reason = error_msg
+
         db.commit()
 
         if info and info["format_id"] == "audio":
@@ -261,12 +289,12 @@ def download_video(db: Session, video_id: str) -> bool | None:
     return bool(info)
 
 
-def check_video_availability(video_id: str) -> bool:
+def check_video_availability(video_id: str) -> tuple[bool, str | None]:
     """Проверяет доступность видео TikTok.
 
     :param video_id: ID видео
 
-    :return: True если видео доступно, False в противном случае
+    :return: True если видео доступно, False в противном случае, Причина недоступности видео
 
     :raises NetworkError: При сетевых ошибках
     """
@@ -277,12 +305,14 @@ def check_video_availability(video_id: str) -> bool:
     }
 
     try:
-        yt_dlp_request(ydl_opts, video_id=video_id, download=False)
-        return True
+        yt_dlp_request(ydl_opts, video_id=video_id)
+        return True, None
     except NetworkError as e:
         raise NetworkError from e
-    except Exception:
-        return False
+    except Exception as e:
+        error_msg = get_error_message(e)
+        print(f"Error checking video {video_id}: {error_msg}")
+        return False, error_msg
 
 
 def get_user_liked_videos(username: str) -> list[dict]:

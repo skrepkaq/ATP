@@ -44,7 +44,7 @@ def check_video_batch() -> None:
             print(f"Checking video {video.id} ({video.name or 'Unknown'})")
 
             try:
-                available = check_video_availability(video.id)
+                available, error_msg = check_video_availability(video.id)
             except NetworkError:
                 print("Encountered a network error, skipping")
                 continue
@@ -68,6 +68,7 @@ def check_video_batch() -> None:
                 crud.update_video_message_id(db, video.id, msg_id)
                 crud.update_video_status(db, video.id, "deleted")
 
+            crud.update_video_deleted_reason(db, video.id, error_msg)
             crud.update_video_last_checked(db, video.id)
 
         print(f"Checked {len(videos)} videos")

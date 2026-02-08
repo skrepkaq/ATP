@@ -78,6 +78,23 @@ def update_video_message_id(db: Session, video_id: str, message_id: int | None) 
     return False
 
 
+def update_video_deleted_reason(db: Session, video_id: str, deleted_reason: str | None) -> bool:
+    """Обновляет причину недоступности видео в базе данных.
+
+    :param db: Сессия базы данных
+    :param video_id: ID видео
+    :param deleted_reason: Причина недоступности видео
+
+    :return: True если успешно, False если видео не найдено
+    """
+    db_video = db.query(Video).filter(Video.id == video_id).first()
+    if db_video:
+        db_video.deleted_reason = deleted_reason
+        db.commit()
+        return True
+    return False
+
+
 def update_video_last_checked(db: Session, video_id: str) -> bool:
     """Обновляет время последней проверки видео на текущее.
 

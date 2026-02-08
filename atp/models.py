@@ -18,6 +18,7 @@ class Video(Base):
     :ivar updated_at: Дата последнего обновления записи
     :ivar last_checked: Дата последней проверки доступности
     :ivar message_id: ID сообщения об удалении видео
+    :ivar deleted_reason: Причина недоступности видео
     """
 
     __tablename__ = "videos"
@@ -27,13 +28,14 @@ class Video(Base):
     date: datetime = Column(DateTime, nullable=False)
     status: str = Column(String, nullable=False, default="new")
     type: str | None = Column(String, nullable=True)
-    author: str | None = Column(String, nullable=True)  # автор видео
+    author: str | None = Column(String, nullable=True)
     created_at: datetime = Column(DateTime, default=lambda: datetime.now())
     updated_at: datetime = Column(
         DateTime, default=lambda: datetime.now(), onupdate=lambda: datetime.now()
     )
     last_checked: datetime | None = Column(DateTime, nullable=True)
     message_id: int | None = Column(Integer, nullable=True)
+    deleted_reason: str | None = Column(String, nullable=True)
 
     def __repr__(self) -> str:
         """Строковое представление объекта Video.
