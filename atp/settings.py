@@ -34,6 +34,7 @@ TIKTOK_USER: str = os.getenv("TIKTOK_USER", "")
 # Настройки Telegram
 TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
+TELEGRAM_MAX_VIDEO_SIZE: int = 1024 * 1024 * 50 - 2048
 
 # Настройки проверки доступности
 CHECK_INTERVAL_DAYS: int = int(os.getenv("CHECK_INTERVAL_DAYS", "7"))

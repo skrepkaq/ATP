@@ -32,6 +32,11 @@ def send_video_deleted_notification(video: Video) -> bool:
 
     try:
         with open(video_path, "rb") as video_file:
+            video_len = video_file.seek(0, io.SEEK_END)
+            if video_len > settings.TELEGRAM_MAX_VIDEO_SIZE:
+                # TODO: Implement video splitting
+                print("Error: video is too large for Telegram. Will be fixed in later versions.")
+                return False
             MAX_LENGHT = 1024
             author = video.author + "\n" if video.author else ""
             cut_name = video.name or ""
