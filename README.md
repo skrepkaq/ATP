@@ -31,10 +31,15 @@ docker compose up atp-from-file
 
 ### Без docker
 
-- Установите python зависимости
-- Установите `ffmpeg`
-- Запустите импорт
+- Установите [ffmpeg](https://www.ffmpeg.org/)
+- Склонируйте репозиторий
 ```bash
+git clone https://github.com/skrepkaq/ATP.git
+cd ATP
+```
+- Установите python зависимости и запустите приложение
+```bash
+pip install -r requirements.txt
 python3 -m atp.import_from_file
 ```
 4. При первом запуске приложение автоматически создаст директорию `config/` и скопирует примеры конфигурационных файлов:
@@ -84,6 +89,7 @@ docker compose up -d
 
 ### Запуск без Docker
 
+- Скрипт нужно запустить в фоне, чтобы он работал всегда. Гуглите как это делается в вашей ОС
 ```bash
 python3 entrypoint.py
 ```
