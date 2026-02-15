@@ -10,15 +10,33 @@ import os
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.orm import Session
-
-from atp import crud
+from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import Session, declarative_base
+from sqlalchemy.schema import MetaData
 
 # revision identifiers, used by Alembic.
 revision = "007"
 down_revision = "006"
 branch_labels = None
 depends_on = None
+
+
+# Use isolated MetaData so it doesn't conflict with global one
+metadata = MetaData()
+Base = declarative_base(metadata=metadata)
+
+
+class TempVideo(Base):
+    """
+    Временная модель для миграции данных.
+    """
+
+    __tablename__ = "videos"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=True)
+    status = Column(String, nullable=False)
+    message_id = Column(Integer, nullable=True)
 
 
 def load_messages():
@@ -49,7 +67,9 @@ def upgrade():
     bind = op.get_bind()
     session = Session(bind=bind)
 
-    if not (videos := crud.get_all_videos(session, status="deleted")):
+    videos = session.query(TempVideo).filter(TempVideo.status == "deleted").all()
+
+    if not videos:
         return
 
     messages = load_messages()
