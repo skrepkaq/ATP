@@ -15,7 +15,7 @@ from pathlib import Path
 
 from gallery_dl import config, job, output
 
-from atp.settings import DOWNLOADS_DIR, TMP_DIR
+from atp.settings import DOWNLOADS_DIR, TMP_DIR, PROXY
 
 # Настройка gallery_dl
 config.load()
@@ -26,6 +26,7 @@ config.set(
     "filename",
     {"extension == 'mp3'": "audio.mp3", "": "{num}.{extension}"},
 )
+config.set(("extractor",), "proxy", PROXY)
 
 output.initialize_logging(logging.INFO)
 output.configure_logging(logging.INFO)
