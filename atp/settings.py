@@ -68,3 +68,10 @@ if not os.path.isabs(COOKIES_FILE):
         COOKIES_FILE = None
 
 TMP_DIR: Path = Path(tempfile.gettempdir()) / "gallery_dl"
+
+# Параметры обхода антибот-фильтров
+USER_AGENT: str = os.getenv("USER_AGENT", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36")
+ORIGIN: str = os.getenv("ORIGIN", "https://www.tiktok.com/")
+
+# Прокси сервер.
+PROXY: str = os.getenv("PROXY", "")

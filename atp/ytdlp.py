@@ -19,7 +19,7 @@ from yt_dlp.extractor.tiktok import TikTokIE, TikTokUserIE
 from yt_dlp.utils import ExtractorError, traverse_obj
 
 from atp.models import Video
-from atp.settings import ANTI_BOT_BYPASS, COOKIES_FILE, DOWNLOADS_DIR, MAX_RETRIES
+from atp.settings import ANTI_BOT_BYPASS, COOKIES_FILE, DOWNLOADS_DIR, MAX_RETRIES, USER_AGENT, ORIGIN, PROXY
 from atp.slideshow import download_slideshow
 
 COOKIE_ERROR = "Log in for access"
@@ -193,9 +193,12 @@ def yt_dlp_request(
     use_cookies = bool(username)
     if ANTI_BOT_BYPASS:
         ydl_opts["http_headers"] = {
-            "User-Agent": "hi mom!"
-        }  # передаём привет маме создателя анти-бот защиты (хз как, но пока это работает)
+            "User-Agent": USER_AGENT, 
+            "Origin": ORIGIN
+        }  
 
+    if PROXY: ydl_opts['proxy'] = PROXY
+        
     is_network_error = False
     last_exception = None
     attempt = 0
