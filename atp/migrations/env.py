@@ -1,6 +1,5 @@
 import os
 import sys
-from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -19,10 +18,6 @@ from atp.database import Base  # noqa: E402
 
 # This is the Alembic Config object
 config = context.config
-
-# Interpret the config file for Python logging
-fileConfig(config.config_file_name)
-
 config.set_section_option(config.config_ini_section, "DATABASE_URL", DATABASE_URL)
 
 

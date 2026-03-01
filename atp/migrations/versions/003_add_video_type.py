@@ -14,6 +14,7 @@ from sqlalchemy import Column, DateTime, String
 from sqlalchemy.orm import Session, declarative_base
 from sqlalchemy.schema import MetaData
 
+from atp.models import VideoStatus, VideoType
 from atp.settings import DOWNLOADS_DIR
 
 revision = "003"
@@ -36,7 +37,7 @@ class TempVideo(Base):
 
     id = Column(String, primary_key=True)
     type = Column(String, nullable=True)
-    status = Column(String, nullable=False, default="new")
+    status = Column(String, nullable=False, default=VideoStatus.NEW)
     updated_at = Column(DateTime, default=lambda: datetime.now(), onupdate=lambda: datetime.now())
 
 
@@ -48,15 +49,17 @@ def upgrade():
 
     try:
         for video in (
-            session.query(TempVideo).filter(TempVideo.status.in_(("success", "deleted"))).all()
+            session.query(TempVideo)
+            .filter(TempVideo.status.in_((VideoStatus.SUCCESS, VideoStatus.DELETED)))
+            .all()
         ):
             slideshow_path = Path(DOWNLOADS_DIR) / f"{video.id}_slideshow.mp4"
 
             if slideshow_path.exists():
-                video.type = "slideshow"
+                video.type = VideoType.SLIDESHOW
                 slideshow_path.rename(Path(DOWNLOADS_DIR) / f"{video.id}.mp4")
             else:
-                video.type = "video"
+                video.type = VideoType.VIDEO
 
         session.commit()
     except Exception as e:

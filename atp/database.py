@@ -3,8 +3,7 @@ from pathlib import Path
 from alembic import command
 from alembic import config as alembic_config
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from atp.settings import DATABASE_URL
 
@@ -31,4 +30,7 @@ def run_migrations() -> None:
         Path(__file__).parent / "alembic.ini",
         config_args={"sqlalchemy.url": DATABASE_URL},
     )
+    # Keep application logging config; let Alembic skip fileConfig()
+    # when migrations are triggered from the app runtime.
+    alembic_cfg.attributes["skip_alembic_logging_config"] = True
     command.upgrade(alembic_cfg, "head")

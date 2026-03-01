@@ -14,6 +14,8 @@ from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import Session, declarative_base
 from sqlalchemy.schema import MetaData
 
+from atp.models import VideoStatus
+
 # revision identifiers, used by Alembic.
 revision = "007"
 down_revision = "006"
@@ -67,7 +69,7 @@ def upgrade():
     bind = op.get_bind()
     session = Session(bind=bind)
 
-    videos = session.query(TempVideo).filter(TempVideo.status == "deleted").all()
+    videos = session.query(TempVideo).filter(TempVideo.status == VideoStatus.DELETED).all()
 
     if not videos:
         return

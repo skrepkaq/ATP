@@ -39,8 +39,12 @@ cd ATP
 ```
 - Установите python зависимости и запустите приложение
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-python3 -m atp.import_from_file
+# или просто
+uv sync
+python3 -m atp --download-from-file
 ```
 4. При первом запуске приложение автоматически создаст директорию `config/` и скопирует примеры конфигурационных файлов:
    - `config/settings.conf` - основные настройки
@@ -91,7 +95,7 @@ docker compose up -d
 
 - Скрипт нужно запустить в фоне, чтобы он работал всегда. Гуглите как это делается в вашей ОС
 ```bash
-python3 entrypoint.py
+python3 -m atp
 ```
 
 ## Готово!

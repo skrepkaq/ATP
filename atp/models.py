@@ -5,6 +5,18 @@ from sqlalchemy import Column, DateTime, Integer, String
 from atp.database import Base
 
 
+class VideoStatus:
+    NEW = "new"
+    SUCCESS = "success"
+    FAILED = "failed"
+    DELETED = "deleted"
+
+
+class VideoType:
+    VIDEO = "video"
+    SLIDESHOW = "slideshow"
+
+
 class Video(Base):
     """Модель для хранения информации о видео TikTok.
 
@@ -26,7 +38,7 @@ class Video(Base):
     id: str = Column(String, primary_key=True)
     name: str | None = Column(String, nullable=True)
     date: datetime = Column(DateTime, nullable=False)
-    status: str = Column(String, nullable=False, default="new")
+    status: str = Column(String, nullable=False, default=VideoStatus.NEW)
     type: str | None = Column(String, nullable=True)
     author: str | None = Column(String, nullable=True)
     created_at: datetime = Column(DateTime, default=lambda: datetime.now())

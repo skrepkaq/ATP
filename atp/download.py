@@ -1,58 +1,65 @@
-"""
-Модуль для скачивания видео TikTok.
-
-Модуль выполняет:
-- Скачивание `new` видео из базы данных
-- Обновление статусов видео в базе данных
-"""
-
-import os
+import logging
 
 from atp import crud
 from atp.database import get_db_session
-from atp.settings import DOWNLOADS_DIR, HOPE_MODE
-from atp.ytdlp import download_video
+from atp.models import VideoStatus
+from atp.settings import HOPE_MODE
+from atp.tiktok import download_video
+
+logger = logging.getLogger(__name__)
 
 
-def download() -> None:
+def download_new_videos() -> None:
     """Скачивает новые видео TikTok"""
-    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
-
     db = get_db_session()
 
     try:
-        videos = crud.get_all_videos(db, status="new")
+        videos = crud.get_videos(db, status=[VideoStatus.NEW])
         if HOPE_MODE:
-            print(
+            logger.info(
                 "HOPE_MODE is enabled, will try to download failed videos. This may take a while."
             )
-            videos.extend(crud.get_all_videos(db, status="failed"))
-        print(f"Found {len(videos)} new{' or failed' if HOPE_MODE else ''} videos")
+            videos.extend(crud.get_videos(db, status=[VideoStatus.FAILED]))
+        logger.info("Found %s new%s videos", len(videos), " or failed" if HOPE_MODE else "")
 
         if not videos:
             return
 
         success_count = 0
         for i, video in enumerate(videos):
-            print(f"Downloading video {i + 1}/{len(videos)}: {video.id}")
+            logger.info("Downloading video %s/%s: %s", i + 1, len(videos), video.id)
 
-            if download_video(db, video.id):
+            if not (result := download_video(video.id)):
+                continue
+            success = not result.deleted_reason
+            status = VideoStatus.SUCCESS if success else VideoStatus.FAILED
+            crud.update_video(
+                db,
+                video=video,
+                status=status,
+                name=result.name,
+                author=result.author,
+                type=result.type,
+                deleted_reason=result.deleted_reason,
+            )
+
+            if success:
                 success_count += 1
-                print(f"Successfully downloaded video {video.id}")
+                logger.info("Successfully downloaded video %s", video.id)
             else:
-                print(f"Failed to download video {video.id}")
+                logger.warning("Failed to download video %s", video.id)
 
-        print(f"Downloaded {success_count}/{len(videos)} videos")
-        if new_left := crud.get_all_videos(db, status="new"):
-            print(f"{len(new_left)} videos with status `new` remaining")
+        logger.info("Downloaded %s/%s videos", success_count, len(videos))
+        if new_left := crud.get_videos(db, status=[VideoStatus.NEW]):
+            logger.info("%s videos with status `new` remaining", len(new_left))
         if HOPE_MODE:
-            print("Don't forget to disable HOPE_MODE in settings.conf!")
+            logger.info("Don't forget to disable HOPE_MODE in settings.conf!")
 
     except Exception as e:
-        print(f"Error: {e}")
+        logger.exception("Error downloading videos: %s", e)
     finally:
         db.close()
 
 
 if __name__ == "__main__":
-    download()
+    download_new_videos()

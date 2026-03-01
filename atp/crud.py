@@ -39,106 +39,40 @@ def add_videos_bulk(db: Session, videos: list[dict[str, datetime]]) -> None:
     db.commit()
 
 
-def update_video_status(db: Session, video_id: str, status: str, name: str | None = None) -> bool:
-    """Обновляет статус видео в базе данных.
+def get_videos(db: Session, status: list[str] | None = None) -> list[Video]:
+    """Получает список видео из базы данных.
 
     :param db: Сессия базы данных
-    :param video_id: ID видео
-    :param status: Новый статус
-    :param name: Название видео (опционально)
-
-    :return: True если успешно, False если видео не найдено
-    """
-    db_video = db.query(Video).filter(Video.id == video_id).first()
-
-    if db_video:
-        db_video.status = status
-        if name:
-            db_video.name = name
-        db.commit()
-        return True
-
-    return False
-
-
-def update_video_message_id(db: Session, video_id: str, message_id: int | None) -> bool:
-    """Обновляет ID сообщения видео в базе данных.
-
-    :param db: Сессия базы данных
-    :param video_id: ID видео
-    :param message_id: ID сообщения
-
-    :return: True если успешно, False если видео не найдено
-    """
-    db_video = db.query(Video).filter(Video.id == video_id).first()
-    if db_video:
-        db_video.message_id = message_id
-        db.commit()
-        return True
-    return False
-
-
-def update_video_deleted_reason(db: Session, video_id: str, deleted_reason: str | None) -> bool:
-    """Обновляет причину недоступности видео в базе данных.
-
-    :param db: Сессия базы данных
-    :param video_id: ID видео
-    :param deleted_reason: Причина недоступности видео
-
-    :return: True если успешно, False если видео не найдено
-    """
-    db_video = db.query(Video).filter(Video.id == video_id).first()
-    if db_video:
-        db_video.deleted_reason = deleted_reason
-        db.commit()
-        return True
-    return False
-
-
-def update_video_last_checked(db: Session, video_id: str) -> bool:
-    """Обновляет время последней проверки видео на текущее.
-
-    :param db: Сессия базы данных
-    :param video_id: ID видео
-
-    :return: True если успешно, False если видео не найдено
-    """
-    db_video = db.query(Video).filter(Video.id == video_id).first()
-
-    if db_video:
-        db_video.last_checked = datetime.now()
-        db.commit()
-        return True
-
-    return False
-
-
-def get_videos_to_check(db: Session, limit: int) -> list[Video]:
-    """Получает партию видео для проверки доступности.
-
-    :param db: Сессия базы данных
-    :param limit: Количество видео для проверки
-
-    :return: Список объектов Video
-    """
-    return (
-        db.query(Video)
-        .filter(Video.status.in_(["success", "deleted"]))
-        .order_by(Video.last_checked)
-        .limit(limit)
-        .all()
-    )
-
-
-def get_all_videos(db: Session, status: str | None = None) -> list[Video]:
-    """Получает видео из базы данных с возможностью фильтрации по статусу.
-
-    :param db: Сессия базы данных
-    :param status: Статус видео для фильтрации (опционально)
-
-    :return: Список объектов Video
+    :param status: Список статусов видео
+    :return: Список объектов видео
     """
     videos = db.query(Video)
     if status:
-        videos = videos.filter(Video.status == status)
+        videos = videos.filter(Video.status.in_(status))
     return videos.all()
+
+
+def update_video(
+    db: Session,
+    video: Video,
+    **kwargs: str | None,
+) -> bool:
+    """Обновляет информацию о видео в базе данных.
+    :param db: Сессия базы данных
+    :param video: Объект видео
+    :param name: Название видео
+    :param date: Дата публикации/лайка видео
+    :param status: Статус видео
+    :param type: Тип видео
+    :param author: Автор видео
+    :param created_at: Дата создания записи
+    :param last_checked: Дата последней проверки доступности
+    :param message_id: ID сообщения об удалении видео
+    :param deleted_reason: Причина недоступности видео
+    :return: True если успешно, False если видео не найдено
+    """
+    video.last_checked = datetime.now()
+    for key, value in kwargs.items():
+        setattr(video, key, value)
+    db.commit()
+    return True

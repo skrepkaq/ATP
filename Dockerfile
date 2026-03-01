@@ -17,12 +17,13 @@ RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
     uv sync --frozen --no-dev --compile-bytecode
 
 ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
     DOCKER=1
 
-COPY --chown=atp:atp example.settings.conf example.settings-docker.conf ./
 COPY --chown=atp:atp atp/ atp/
-COPY --chown=atp:atp entrypoint.py .
+COPY --chown=atp:atp example.settings.conf .
+RUN ln -s /app/atp/video_import.py /app/atp/import_from_file.py
 
 USER atp
 
-ENTRYPOINT ["python", "-u", "entrypoint.py"]
+ENTRYPOINT ["python", "-m", "atp"]

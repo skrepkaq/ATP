@@ -1,27 +1,196 @@
+import logging
 import os
+import re
+import shutil
 import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-from atp.config_init import initialize_config
+logger = logging.getLogger(__name__)
 
-# Инициализируем конфигурацию при импорте модуля
 DOCKER = os.getenv("DOCKER", "0") == "1"
-config_dir = initialize_config()
-settings_file = config_dir / "settings.conf"
-docker_settings_file = config_dir / "settings-docker.conf"
 
-# Загружаем настройки из settings.conf
-if settings_file.exists():
-    load_dotenv(settings_file)
-else:
-    # Fallback: загружаем из .env для обратной совместимости
-    load_dotenv()
 
-if DOCKER and docker_settings_file.exists():
-    load_dotenv(docker_settings_file, override=True)
+def _get_project_root() -> Path:
+    """Определяет корень проекта.
 
+    Корень проекта - это директория, содержащая compose.yaml и atp/
+    (на три уровня выше от atp/settings.py).
+
+    :return: Путь к корню проекта
+    """
+    return Path(__file__).parent.parent
+
+
+def get_config_dir() -> Path:
+    """Определяет путь к директории конфигурации.
+
+    Проверяет наличие /config, если существует - использует его
+    (случай когда volume смонтирован в Docker).
+    Иначе использует config/ относительно корня проекта.
+
+    :return: Путь к директории конфигурации
+    """
+    if DOCKER:
+        return Path("/config")
+    return _get_project_root() / "config"
+
+
+def load_config() -> Path:
+    """Инициализирует директорию конфигурации.
+
+    Создаёт директорию config, если её нет, и копирует
+    example.settings.conf в settings.conf, если settings.conf не существует.
+
+    :return: Путь к директории конфигурации
+    """
+    config_dir = get_config_dir()
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    settings_path = config_dir / "settings.conf"
+    example_path = _get_project_root() / "example.settings.conf"
+    if not settings_path.exists() and example_path.exists():
+        shutil.copy2(example_path, settings_path)
+        logger.info(
+            f"Created {settings_path} from example. "
+            "Please configure it before use and restart the application."
+        )
+        while True:
+            import time
+
+            time.sleep(1)
+
+    upgrade_config()
+
+    settings_file = config_dir / "settings.conf"
+
+    # Загружаем настройки из settings.conf
+    if settings_file.exists():
+        load_dotenv(settings_file)
+    else:
+        # Fallback: загружаем из .env для обратной совместимости
+        load_dotenv()
+    return config_dir
+
+
+def set_config_value(key: str, value: str) -> None:
+    """Устанавливает значение в settings.conf.
+
+    :param key: Ключ
+    :param value: Значение
+    """
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+    with open(settings_file, "r+") as f:
+        config = f.readlines()
+        for i, line in enumerate(config):
+            if line.startswith(key):
+                config[i] = f"{key}={value}\n"
+                break
+        f.seek(0)
+        f.writelines(config)
+        f.truncate()
+
+
+def get_config_version() -> int:
+    """Получает версию конфигурации из settings.conf."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+    with open(settings_file) as f:
+        config = f.read()
+        return int(re.search(r"CONFIG_VERSION=(\d+)", config).group(1))
+
+
+def version_2() -> None:
+    """Обновляет конфигурацию до версии 2."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+    with open(settings_file, "a") as f:
+        f.write(
+            "\n# Пытаться скачать failed видео, вдруг их восстановили. "
+            "Советую поставить MAX_RETRIES=1"
+            "\nHOPE_MODE=false"
+            "\nMAX_RETRIES=3\n"
+        )
+
+
+def version_3() -> None:
+    """Обновляет конфигурацию до версии 3."""
+    config_dir = get_config_dir()
+    REMOVE_LINES = [
+        "# Настройки browserless",
+        "BROWSERLESS_URL",
+    ]
+    for settings_file in ["settings-docker.conf", "settings.conf"]:
+        settings_path = config_dir / settings_file
+        if settings_path.exists():
+            with open(settings_path, "r+") as f:
+                config = f.readlines()
+                for remove_line in REMOVE_LINES:
+                    config = [line for line in config if not line.startswith(remove_line)]
+                f.seek(0)
+                f.writelines(config)
+                f.truncate()
+
+
+def version_4() -> None:
+    """Обновляет конфигурацию до версии 4."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+    with open(settings_file, "a") as f:
+        f.write("\n# Пытаться обойти анти-бот защиту тиктока\nANTI_BOT_BYPASS=false\n")
+
+
+def version_5() -> None:
+    """Обновляет конфигурацию до версии 5."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+    with open(settings_file, "a") as f:
+        f.write("\nCOOKIES_FILE=cookies.txt\n")
+
+
+def version_6() -> None:
+    """Обновляет конфигурацию до версии 6."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+    docker_settings_file = config_dir / "settings-docker.conf"
+    with open(settings_file, "r+") as f:
+        config = f.readlines()
+        for i, line in enumerate(config):
+            if line.startswith("DOWNLOADS_DIR"):
+                config[i] = f"{line[:-1]}  # при запуске в докере путь всегда /downloads\n"
+                break
+        f.seek(0)
+        f.writelines(config)
+        f.truncate()
+    if docker_settings_file.exists():
+        try:
+            os.remove(docker_settings_file)
+        except Exception as e:
+            logger.warning("Error removing %s: %s", docker_settings_file, e)
+
+
+VERSIONS = [
+    None,
+    version_2,
+    version_3,
+    version_4,
+    version_5,
+    version_6,
+]
+
+
+def upgrade_config() -> None:
+    """Обновляет конфигурацию до последней версии."""
+    config_version = get_config_version()
+    for i in range(config_version, len(VERSIONS)):
+        logger.info("Upgrading config to version %s...", i + 1)
+        VERSIONS[i]()
+        set_config_value("CONFIG_VERSION", str(i + 1))
+
+
+config_dir = load_config()
 
 # Настройки импорта видео
 IMPORT_LIKED_VIDEOS: bool = os.getenv("IMPORT_LIKED_VIDEOS", "true").lower() == "true"
@@ -34,7 +203,7 @@ TIKTOK_USER: str = os.getenv("TIKTOK_USER", "")
 # Настройки Telegram
 TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
-TELEGRAM_MAX_VIDEO_SIZE: int = 1024 * 1024 * 50 - 2048
+TELEGRAM_MAX_VIDEO_SIZE = 1024 * 1024 * 50 - 2048
 
 # Настройки проверки доступности
 CHECK_INTERVAL_DAYS: int = int(os.getenv("CHECK_INTERVAL_DAYS", "7"))
@@ -54,7 +223,10 @@ if not os.path.isabs(DATABASE_FILE):
     DATABASE_FILE = str(config_dir / DATABASE_FILE)
 DATABASE_URL: str = f"sqlite:///{DATABASE_FILE}"
 
-DOWNLOADS_DIR: str = os.getenv("DOWNLOADS_DIR", "/downloads")
+if DOCKER:
+    DOWNLOADS_DIR = "/downloads"
+else:
+    DOWNLOADS_DIR: str = os.getenv("DOWNLOADS_DIR", "./downloads")
 
 TIKTOK_DATA_FILE: str = os.getenv("TIKTOK_DATA_FILE", "user_data_tiktok.json")
 if not os.path.isabs(TIKTOK_DATA_FILE):
@@ -67,4 +239,9 @@ if not os.path.isabs(COOKIES_FILE):
     if not os.path.exists(COOKIES_FILE):
         COOKIES_FILE = None
 
-TMP_DIR: Path = Path(tempfile.gettempdir()) / "gallery_dl"
+SLIDESHOW_TMP_DIR: Path = Path(tempfile.gettempdir()) / "gallery_dl"
+PARTS_TMP_DIR: Path = Path(tempfile.gettempdir()) / "video_parts"
+
+os.makedirs(SLIDESHOW_TMP_DIR, exist_ok=True)
+os.makedirs(PARTS_TMP_DIR, exist_ok=True)
+os.makedirs(DOWNLOADS_DIR, exist_ok=True)

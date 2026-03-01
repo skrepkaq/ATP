@@ -1,26 +1,69 @@
-"""
-Модуль для работы с yt-dlp и загрузки видео из TikTok.
-
-Этот модуль предоставляет функции для:
-- Загрузки видео с помощью yt-dlp
-- Проверки доступности видео
-- Обработки сетевых ошибок
-- Обновления информации о видео в базе данных
-"""
-
+import collections
 import itertools
+import logging
 import re
-from datetime import datetime
 from pathlib import Path
 
 import yt_dlp
-from sqlalchemy.orm import Session
+from gallery_dl import config, job
 from yt_dlp.extractor.tiktok import TikTokIE, TikTokUserIE
 from yt_dlp.utils import ExtractorError, traverse_obj
 
-from atp.models import Video
-from atp.settings import ANTI_BOT_BYPASS, COOKIES_FILE, DOWNLOADS_DIR, MAX_RETRIES
-from atp.slideshow import download_slideshow
+from atp.media import render_slideshow, temp_files_cleanup
+from atp.models import VideoType
+from atp.settings import (
+    ANTI_BOT_BYPASS,
+    COOKIES_FILE,
+    DOWNLOADS_DIR,
+    MAX_RETRIES,
+    SLIDESHOW_TMP_DIR,
+)
+
+logger = logging.getLogger(__name__)
+
+# Настройка gallery_dl
+config.load()
+config.set((), "directory", "")
+config.set(("extractor",), "base-directory", str(SLIDESHOW_TMP_DIR))
+config.set(
+    ("extractor", "tiktok"),
+    "filename",
+    {"extension == 'mp3'": "audio.mp3", "": "{num}.{extension}"},
+)
+
+
+class YtDlpLogger:
+    def __init__(self, quiet: bool = False, no_warnings: bool = False, **_):
+        self.quiet = quiet
+        self.no_warnings = no_warnings
+
+    def debug(self, msg: str) -> None:
+        if self.quiet:
+            return
+        if msg.startswith("[debug] "):
+            logger.debug(msg)
+        else:
+            logger.info(msg)
+
+    def warning(self, msg: str) -> None:
+        if self.quiet or self.no_warnings:
+            return
+        logger.warning(msg)
+
+    def error(self, msg: str) -> None:
+        logger.error(msg)
+
+
+VideoInfo = collections.namedtuple(
+    "VideoInfo", ["name", "author", "type", "deleted_reason"], defaults=[None, None, None, None]
+)
+
+
+class NetworkError(Exception):
+    """Исключение при сетевых ошибках."""
+
+    pass
+
 
 COOKIE_ERROR = "Log in for access"
 
@@ -144,20 +187,14 @@ class TikTokLikedIE(TikTokUserIE):
         return self.playlist_result(self._entries(sec_uid, user_name), sec_uid, user_name)
 
 
-class NetworkError(Exception):
-    """Исключение при сетевых ошибках."""
-
-    pass
-
-
 def get_error_message(e: Exception) -> str:
     if hasattr(e, "orig_msg"):
         return e.orig_msg
-    if exc_info := getattr(e, "exc_info", None):
-        if error := exc_info[1]:
-            if hasattr(error, "orig_msg"):
-                return error.orig_msg
-            return str(error)
+    exc_info = getattr(e, "exc_info", None)
+    if exc_info and (error := exc_info[1]):
+        if hasattr(error, "orig_msg"):
+            return error.orig_msg
+        return str(error)
     return str(e)
 
 
@@ -195,6 +232,7 @@ def yt_dlp_request(
         ydl_opts["http_headers"] = {
             "User-Agent": "hi mom!"
         }  # передаём привет маме создателя анти-бот защиты (хз как, но пока это работает)
+    ydl_opts["logger"] = YtDlpLogger(**ydl_opts)
 
     is_network_error = False
     last_exception = None
@@ -220,7 +258,7 @@ def yt_dlp_request(
                 use_cookies = True
                 continue
 
-            print(
+            logger.warning(
                 f"Error requesting {'video' if video_id else 'user'} {video_id or username} "
                 f"(attempt {attempt + 1}/{MAX_RETRIES}): {error_msg}"
             )
@@ -229,7 +267,7 @@ def yt_dlp_request(
 
     # Если достигли максимального количества попыток или не сетевая ошибка
     if is_network_error:
-        print(
+        logger.error(
             "Network error detected, skipping\n"
             f"Try to {'disable' if ANTI_BOT_BYPASS else 'enable'} ANTI_BOT_BYPASS in settings.conf"
         )
@@ -238,65 +276,12 @@ def yt_dlp_request(
         raise last_exception
 
 
-def download_video(db: Session, video_id: str) -> bool | None:
-    """Загружает видео TikTok.
-
-    :param db: Сессия базы данных
-    :param video_id: ID видео
-
-    :return: True если загрузка успешна, False в противном случае, None при сетевой ошибке
-    """
-    ydl_opts = {
-        "format": "best",
-        "outtmpl": str(Path(DOWNLOADS_DIR) / f"{video_id}.mp4"),
-        "quiet": False,
-        "no_warnings": False,
-    }
-
-    error_msg = None
-    try:
-        info = yt_dlp_request(ydl_opts, video_id=video_id, download=True)
-    except NetworkError:
-        return None
-    except Exception as e:
-        error_msg = get_error_message(e)
-        print(f"Error downloading video {video_id}: {error_msg}")
-        info = False
-
-    video: Video = db.query(Video).filter(Video.id == video_id).first()
-    if video:
-        video.status = "success" if info else "failed"
-        video.name = info.get("description", f"Video {video_id}") if info else ""
-        video.last_checked = datetime.now()
-        video.type = "video"  # Устанавливаем тип по умолчанию как "video"
-
-        # Если в видео есть информация об авторе и она отсутствует в базе
-        if info and info.get("uploader") and not video.author:
-            video.author = info["uploader"]
-
-        if error_msg:
-            video.deleted_reason = error_msg
-
-        db.commit()
-
-        if info and info["format_id"] == "audio":
-            if download_slideshow(video_id):
-                video.type = "slideshow"
-            else:
-                video.status = "new"
-                info = False
-            db.commit()
-    return bool(info)
-
-
-def check_video_availability(video_id: str) -> tuple[bool, str | None]:
+def check_video_availability(video_id: str) -> VideoInfo | None:
     """Проверяет доступность видео TikTok.
 
     :param video_id: ID видео
 
-    :return: True если видео доступно, False в противном случае, Причина недоступности видео
-
-    :raises NetworkError: При сетевых ошибках
+    :return: Информация о видео или None при сетевой ошибке
     """
     ydl_opts = {
         "quiet": True,
@@ -306,13 +291,13 @@ def check_video_availability(video_id: str) -> tuple[bool, str | None]:
 
     try:
         yt_dlp_request(ydl_opts, video_id=video_id)
-        return True, None
-    except NetworkError as e:
-        raise NetworkError from e
+        return VideoInfo(deleted_reason=None)
+    except NetworkError:
+        return None
     except Exception as e:
         error_msg = get_error_message(e)
-        print(f"Error checking video {video_id}: {error_msg}")
-        return False, error_msg
+        logger.error("Error checking video %s: %s", video_id, error_msg)
+        return VideoInfo(deleted_reason=error_msg)
 
 
 def get_user_liked_videos(username: str) -> list[dict]:
@@ -333,3 +318,53 @@ def get_user_liked_videos(username: str) -> list[dict]:
         return info.get("entries", [])
     except Exception:
         return []
+
+
+def download_video(video_id: str) -> VideoInfo | None:
+    """Загружает видео TikTok.
+
+    :param video_id: ID видео
+
+    :return: Информация о видео или None при сетевой ошибке
+    """
+    ydl_opts = {
+        "format": "best",
+        "outtmpl": str(Path(DOWNLOADS_DIR) / f"{video_id}.mp4"),
+        "quiet": False,
+        "no_warnings": False,
+    }
+
+    error_msg = None
+    try:
+        info = yt_dlp_request(ydl_opts, video_id=video_id, download=True)
+        if info["format_id"] == "audio":
+            success = download_slideshow(video_id)
+            if not success:
+                return None
+            video_type = VideoType.SLIDESHOW
+        else:
+            video_type = VideoType.VIDEO
+
+        return VideoInfo(name=info["description"], author=info["uploader"], type=video_type)
+    except NetworkError:
+        return None
+    except Exception as e:
+        error_msg = get_error_message(e)
+        logger.error("Error downloading video %s: %s", video_id, error_msg)
+        return VideoInfo(deleted_reason=error_msg)
+
+
+def download_slideshow(video_id: str) -> bool:
+    logger.info("Processing slideshow: %s", video_id)
+
+    temp_files_cleanup()
+
+    # Загрузка изображений и аудио
+    try:
+        job.DownloadJob(f"https://www.tiktok.com/share/video/{video_id}").run()
+    except Exception as e:
+        logger.error("Error downloading images for the slideshow: %s", e)
+        return False
+
+    # Создание слайдшоу
+    return render_slideshow(video_id)

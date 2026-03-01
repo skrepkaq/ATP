@@ -9,7 +9,7 @@ services:
   atp-from-file:
     image: skrepkaq/atp
     container_name: atp-from-file
-    entrypoint: ["python", "-um", "atp.import_from_file"]
+    entrypoint: ["python", "-m", "atp", "--download-from-file"]
     volumes:
       - ./config:/config
       - ./downloads:/downloads
