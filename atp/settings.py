@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -32,6 +33,8 @@ def get_config_dir() -> Path:
 
     :return: Путь к директории конфигурации
     """
+    if custom_config_dir := os.getenv("TEST_CONFIG_DIR"):
+        return Path(custom_config_dir)
     if DOCKER:
         return Path("/config")
     return _get_project_root() / "config"
@@ -57,8 +60,6 @@ def load_config() -> Path:
             "Please configure it before use and restart the application."
         )
         while True:
-            import time
-
             time.sleep(1)
 
     upgrade_config()

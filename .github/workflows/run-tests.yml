@@ -1,0 +1,43 @@
+name: Tests
+
+on:
+  push:
+
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        installer:
+          - name: uv
+            install: uv sync --group dev
+            lint: uv run ruff check .
+            test: uv run pytest -v tests/
+          - name: pip
+            install: pip install -r requirements.txt && pip install -e .
+            lint: ruff check .
+            test: pytest -v tests/
+    name: test (${{ matrix.installer.name }})
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        if: matrix.installer.name == 'uv'
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: ${{ matrix.installer.install }}
+
+      - name: Lint
+        run: ${{ matrix.installer.lint }}
+
+      - name: Run tests
+        run: ${{ matrix.installer.test }}

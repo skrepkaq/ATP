@@ -15,8 +15,35 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
     "ruff>=0.11.10",
 ]
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "B",   # flake8-bugbear (catches broad exceptions, etc.)
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+]
+
+[tool.ruff.lint.isort]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+markers = [
+    "unit: fast isolated tests",
+    "integration: tests with filesystem/db boundaries and mocked external APIs",
+    "e2e_private: private end-to-end tests requiring real credentials/services",
+]
