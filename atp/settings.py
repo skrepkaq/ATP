@@ -55,10 +55,10 @@ def load_config() -> Path:
     example_path = _get_project_root() / "example.settings.conf"
     if not settings_path.exists() and example_path.exists():
         shutil.copy2(example_path, settings_path)
-        logger.info(
+        print(
             f"Created {settings_path} from example. "
             "Please configure it before use and restart the application."
-        )
+        )  # для обратной совместимости, оставляем print вместо logger.info
         while True:
             time.sleep(1)
 
