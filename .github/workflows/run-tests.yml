@@ -10,6 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         installer:
           - name: uv
             install: uv sync --group dev
@@ -19,7 +20,7 @@ jobs:
             install: pip install -r requirements.txt && pip install -e .
             lint: ruff check .
             test: pytest -v tests/
-    name: test (${{ matrix.installer.name }})
+    name: test (py${{ matrix.python-version }}, ${{ matrix.installer.name }})
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -27,7 +28,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install uv
         if: matrix.installer.name == 'uv'

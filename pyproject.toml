@@ -1,7 +1,7 @@
 [project]
 name = "atp"
-version = "1.6.1"
-requires-python = ">=3.12"
+version = "1.6.2"
+requires-python = ">=3.10"
 dependencies = [
     "alembic>=1.15.2",
     "ffmpeg-python>=0.2.0",
@@ -9,7 +9,7 @@ dependencies = [
     "python-dotenv>=1.1.0",
     "requests>=2.32.3",
     "schedule>=1.2.2",
-    "sqlalchemy>=2.0.40",
+    "sqlalchemy>=2.0.41",
     "yt-dlp[curl-cffi]>=2025.10.14",
 ]
 
