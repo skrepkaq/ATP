@@ -1,5 +1,6 @@
 import argparse
 import logging
+import sys
 import time
 
 import schedule
@@ -34,13 +35,12 @@ def run_scheduler() -> None:
     schedule.every().hour.at("00:00").do(check_video_batch)
 
     if DOWNLOAD_FROM_TIKTOK:
-        if TIKTOK_USER:
-            schedule.every().hour.at("30:00").do(run_download_from_tiktok)
-        else:
-            logger.warning(
-                "TIKTOK_USER is not set in settings.conf. Import from TikTok is disabled!"
+        if not TIKTOK_USER:
+            logger.error(
+                "TIKTOK_USER is missing! Set it in settings.conf or disable DOWNLOAD_FROM_TIKTOK"
             )
-            time.sleep(5)
+            sys.exit(1)
+        schedule.every().hour.at("30:00").do(run_download_from_tiktok)
 
     logger.info("ATP archiver has been started!")
     while True:
