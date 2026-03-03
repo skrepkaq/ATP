@@ -41,7 +41,7 @@ def test_yt_dlp_request_retries_with_cookies_on_login_error(
             return {"ok": True}
 
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDL)
-    monkeypatch.setattr(tiktok, "MAX_RETRIES", 2)
+    monkeypatch.setattr(tiktok, "MAX_RETRIES", 1)
     monkeypatch.setattr(tiktok, "COOKIES_FILE", "/tmp/cookies.txt")
     monkeypatch.setattr(tiktok, "ANTI_BOT_BYPASS", False)
 
@@ -50,6 +50,15 @@ def test_yt_dlp_request_retries_with_cookies_on_login_error(
     assert result == {"ok": True}
     assert "cookiefile" not in calls[0]
     assert calls[1]["cookiefile"] == "/tmp/cookies.txt"
+
+
+@pytest.mark.unit
+def test_yt_dlp_request_raises_value_error_on_no_video_id_or_username() -> None:
+    with pytest.raises(ValueError, match="Either video_id or username must be provided"):
+        tiktok.yt_dlp_request({})
+
+    with pytest.raises(ValueError, match="Either video_id or username must be provided"):
+        tiktok.yt_dlp_request({}, username="")
 
 
 @pytest.mark.unit

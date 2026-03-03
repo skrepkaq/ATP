@@ -7,7 +7,7 @@ import schedule
 from atp.check_availability import check_video_batch
 from atp.database import run_migrations
 from atp.download import download_new_videos
-from atp.settings import DOWNLOAD_FROM_TIKTOK
+from atp.settings import DOWNLOAD_FROM_TIKTOK, TIKTOK_USER
 from atp.telegram import discover_chat_id
 from atp.video_import import import_from_file, import_from_tiktok
 
@@ -34,7 +34,13 @@ def run_scheduler() -> None:
     schedule.every().hour.at("00:00").do(check_video_batch)
 
     if DOWNLOAD_FROM_TIKTOK:
-        schedule.every().hour.at("30:00").do(run_download_from_tiktok)
+        if TIKTOK_USER:
+            schedule.every().hour.at("30:00").do(run_download_from_tiktok)
+        else:
+            logger.warning(
+                "TIKTOK_USER is not set in settings.conf. Import from TikTok is disabled!"
+            )
+            time.sleep(5)
 
     logger.info("ATP archiver has been started!")
     while True:

@@ -30,6 +30,7 @@ def test_run_scheduler_registers_jobs_and_bootstraps(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(app, "run_migrations", lambda: called.append("migrations"))
     monkeypatch.setattr(app, "discover_chat_id", lambda: called.append("discover"))
     monkeypatch.setattr(app, "DOWNLOAD_FROM_TIKTOK", True)
+    monkeypatch.setattr(app, "TIKTOK_USER", "u")
     monkeypatch.setattr(app.schedule, "every", lambda: _FakeJob(scheduled))
     monkeypatch.setattr(
         app.schedule,
@@ -70,6 +71,30 @@ def test_run_scheduler_without_tiktok_import_job(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(app, "run_migrations", lambda: called.append("migrations"))
     monkeypatch.setattr(app, "discover_chat_id", lambda: called.append("discover"))
     monkeypatch.setattr(app, "DOWNLOAD_FROM_TIKTOK", False)
+    monkeypatch.setattr(app.schedule, "every", lambda: _FakeJob(scheduled))
+    monkeypatch.setattr(
+        app.schedule,
+        "run_pending",
+        lambda: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+    monkeypatch.setattr(app.time, "sleep", lambda _s: None)
+
+    with pytest.raises(KeyboardInterrupt):
+        app.run_scheduler()
+
+    assert called == ["migrations", "discover"]
+    assert ("00:00", "check_video_batch") in scheduled
+    assert not any(job_name == "run_download_from_tiktok" for _ts, job_name in scheduled)
+
+
+@pytest.mark.integration
+def test_run_scheduler_without_tiktok_user(monkeypatch: pytest.MonkeyPatch) -> None:
+    called: list[str] = []
+    scheduled: list[tuple[str, str]] = []
+    monkeypatch.setattr(app, "run_migrations", lambda: called.append("migrations"))
+    monkeypatch.setattr(app, "discover_chat_id", lambda: called.append("discover"))
+    monkeypatch.setattr(app, "DOWNLOAD_FROM_TIKTOK", True)
+    monkeypatch.setattr(app, "TIKTOK_USER", "")
     monkeypatch.setattr(app.schedule, "every", lambda: _FakeJob(scheduled))
     monkeypatch.setattr(
         app.schedule,

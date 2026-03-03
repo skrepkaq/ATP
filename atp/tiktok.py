@@ -216,6 +216,11 @@ def yt_dlp_request(
     :raises NetworkError: При сетевых ошибках
     :raises Exception: При других ошибках
     """
+    if not (video_id or username):
+        error_msg = "Either video_id or username must be provided"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
     network_errors = [
         "Read timed out",
         "Failed to resolve",
