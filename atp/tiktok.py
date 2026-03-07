@@ -159,30 +159,29 @@ class TikTokLikedIE(TikTokUserIE):
                 )
                 or {}
             )
-
-            if detail.get("statusCode") == 10222:
+            favorite_count = traverse_obj(detail, ("userInfo", "stats", "diggCount", {int}))
+            if not favorite_count and detail.get("statusCode") == 10222:
                 self.raise_login_required(
                     "This user's account is private. Log into an account that has access"
+                )
+            elif favorite_count == 0:
+                raise ExtractorError(
+                    "This user's liked videos are not open to the public. "
+                    "Open it or log into this account",
+                    expected=True,
                 )
 
             sec_uid = traverse_obj(detail, ("userInfo", "user", "secUid", {str}))
             if not sec_uid:
                 sec_uid = self._extract_sec_uid_from_embed(user_name)
 
-        if not sec_uid:
-            raise ExtractorError(
-                "Unable to extract secondary user ID. If you are able to get the channel_id "
-                'from a video posted by this user, try using "tiktokliked:channel_id/liked" as the '
-                "input URL (replacing `channel_id` with its actual value)",
-                expected=True,
-            )
-
-        if not traverse_obj(detail, ("userInfo", "stats", "diggCount", {int})):
-            raise ExtractorError(
-                "This user's liked videos are not open to the public. "
-                "Open it or log into this account",
-                expected=True,
-            )
+            if not sec_uid:
+                raise ExtractorError(
+                    "Unable to extract secondary user ID. If you are able to get the channel_id "
+                    'from a video posted by this user, try using "tiktokliked:channel_id/liked" '
+                    "as the input URL (replacing `channel_id` with its actual value)",
+                    expected=True,
+                )
 
         return self.playlist_result(self._entries(sec_uid, user_name), sec_uid, user_name)
 
