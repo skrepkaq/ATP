@@ -230,6 +230,7 @@ def yt_dlp_request(
         "Unable to download webpage",
         "Unable to extract webpage video data",
         "Unsupported URL",
+        "Failed to perform, curl",
     ]
     use_cookies = bool(username)
     if ANTI_BOT_BYPASS:
