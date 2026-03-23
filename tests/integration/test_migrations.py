@@ -11,7 +11,6 @@ EXPECTED_VIDEO_COLUMNS = {
     "date",
     "status",
     "created_at",
-    "updated_at",
     "last_checked",
     "type",
     "author",
