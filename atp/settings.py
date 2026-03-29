@@ -172,6 +172,41 @@ def version_6() -> None:
             logger.warning("Error removing %s: %s", docker_settings_file, e)
 
 
+def version_7() -> None:
+    """Обновляет конфигурацию до версии 7."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+
+    download_from_tiktok = True
+    tiktok_user = ""
+
+    with open(settings_file, "r+") as f:
+        config = f.readlines()
+        new_lines = []
+        for i, line in enumerate(config):
+            if i + 1 < len(config) and config[i + 1].startswith("# Настройки тиктока"):
+                continue
+            if line.startswith("# Настройки тиктока"):
+                continue
+            if line.startswith("DOWNLOAD_FROM_TIKTOK"):
+                download_from_tiktok = "true" in line.split("=")[1].strip()
+                continue
+            if line.startswith("TIKTOK_USER"):
+                tiktok_user = line.split("=")[1].strip().replace('"', "")
+            new_lines.append(line)
+        f.seek(0)
+        f.writelines(new_lines)
+        f.truncate()
+
+    if not download_from_tiktok and tiktok_user:
+        logger.warning(
+            "DOWNLOAD_FROM_TIKTOK was disabled, but TIKTOK_USER was set\n"
+            "Removing TIKTOK_USER\n"
+            "If you want to enable auto import from TikTok, set TIKTOK_USER in settings.conf"
+        )
+        set_config_value("TIKTOK_USER", "")
+
+
 VERSIONS = [
     None,
     version_2,
@@ -179,6 +214,7 @@ VERSIONS = [
     version_4,
     version_5,
     version_6,
+    version_7,
 ]
 
 
@@ -194,12 +230,9 @@ def upgrade_config() -> None:
 config_dir = load_config()
 
 # Настройки импорта видео
+TIKTOK_USER: str = os.getenv("TIKTOK_USER", "")
 IMPORT_LIKED_VIDEOS: bool = os.getenv("IMPORT_LIKED_VIDEOS", "true").lower() == "true"
 IMPORT_FAVORITE_VIDEOS: bool = os.getenv("IMPORT_FAVORITE_VIDEOS", "true").lower() == "true"
-
-# Настройки тиктока
-DOWNLOAD_FROM_TIKTOK: bool = os.getenv("DOWNLOAD_FROM_TIKTOK", "true").lower() == "true"
-TIKTOK_USER: str = os.getenv("TIKTOK_USER", "")
 
 # Настройки Telegram
 TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")

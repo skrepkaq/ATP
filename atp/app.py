@@ -5,10 +5,11 @@ import time
 
 import schedule
 
+from atp import crud
 from atp.check_availability import check_video_batch
-from atp.database import run_migrations
+from atp.database import get_db_session, run_migrations
 from atp.download import download_new_videos
-from atp.settings import DOWNLOAD_FROM_TIKTOK, TIKTOK_USER
+from atp.settings import TIKTOK_USER
 from atp.telegram import discover_chat_id
 from atp.video_import import import_from_file, import_from_tiktok
 
@@ -31,16 +32,24 @@ def run_scheduler() -> None:
     """Основной цикл работы приложения"""
     run_migrations()
     discover_chat_id()
+    run_download_from_file()
+
+    db = get_db_session()
+    videos = crud.get_videos(db)
+    db.close()
+    if not videos:
+        logger.error(
+            "No videos were imported! Cannot start the archiver!\n"
+            "Please fix the errors above and restart the application"
+        )
+        sys.exit(1)
 
     schedule.every().hour.at("00:00").do(check_video_batch)
 
-    if DOWNLOAD_FROM_TIKTOK:
-        if not TIKTOK_USER:
-            logger.error(
-                "TIKTOK_USER is missing! Set it in settings.conf or disable DOWNLOAD_FROM_TIKTOK"
-            )
-            sys.exit(1)
+    if TIKTOK_USER:
         schedule.every().hour.at("30:00").do(run_download_from_tiktok)
+    else:
+        logger.warning("TIKTOK_USER is missing! Importing videos from TikTok is disabled")
 
     logger.info("ATP archiver has been started!")
     while True:
@@ -58,9 +67,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.download_from_file:
-        run_migrations()
-        run_download_from_file()
-        return
+        from atp.video_import import deprecated_run
+
+        return deprecated_run()
 
     run_scheduler()
 

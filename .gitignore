@@ -199,3 +199,4 @@ downloads/*
 user_data_tiktok.json
 result.json
 config/*
+tests/e2e_private/*

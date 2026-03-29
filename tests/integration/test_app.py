@@ -1,8 +1,9 @@
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy.orm import Session
 
-from atp import app
+from atp import app, crud, video_import
 
 
 class _FakeJob:
@@ -24,12 +25,16 @@ class _FakeJob:
 
 
 @pytest.mark.integration
-def test_run_scheduler_registers_jobs_and_bootstraps(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_scheduler_registers_jobs_and_bootstraps(
+    sqlite_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     called: list[str] = []
     scheduled: list[tuple[str, str]] = []
+    monkeypatch.setattr(app, "run_download_from_file", lambda: None)
+    monkeypatch.setattr(app, "get_db_session", lambda: sqlite_session)
+    monkeypatch.setattr(crud, "get_videos", lambda _db: [object()])
     monkeypatch.setattr(app, "run_migrations", lambda: called.append("migrations"))
     monkeypatch.setattr(app, "discover_chat_id", lambda: called.append("discover"))
-    monkeypatch.setattr(app, "DOWNLOAD_FROM_TIKTOK", True)
     monkeypatch.setattr(app, "TIKTOK_USER", "u")
     monkeypatch.setattr(app.schedule, "every", lambda: _FakeJob(scheduled))
     monkeypatch.setattr(
@@ -55,22 +60,27 @@ def test_main_download_from_file_mode(monkeypatch: pytest.MonkeyPatch) -> None:
         "parse_args",
         lambda _self: SimpleNamespace(download_from_file=True),
     )
-    monkeypatch.setattr(app, "run_migrations", lambda: called.append("migrations"))
-    monkeypatch.setattr(app, "run_download_from_file", lambda: called.append("from_file"))
+    monkeypatch.setattr(video_import, "deprecated_run", lambda: called.append("deprecated_run"))
     monkeypatch.setattr(app, "run_scheduler", lambda: called.append("scheduler"))
 
     app.main()
 
-    assert called == ["migrations", "from_file"]
+    assert called == ["deprecated_run"]
 
 
 @pytest.mark.integration
-def test_run_scheduler_without_tiktok_import_job(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_scheduler_without_tiktok_user_warns_and_skips_tiktok_job(
+    sqlite_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     called: list[str] = []
     scheduled: list[tuple[str, str]] = []
     monkeypatch.setattr(app, "run_migrations", lambda: called.append("migrations"))
     monkeypatch.setattr(app, "discover_chat_id", lambda: called.append("discover"))
-    monkeypatch.setattr(app, "DOWNLOAD_FROM_TIKTOK", False)
+    monkeypatch.setattr(app, "run_download_from_file", lambda: called.append("download_from_file"))
+    monkeypatch.setattr(app, "get_db_session", lambda: sqlite_session)
+    monkeypatch.setattr(crud, "get_videos", lambda _db: [object()])
+    monkeypatch.setattr(app, "TIKTOK_USER", "")
     monkeypatch.setattr(app.schedule, "every", lambda: _FakeJob(scheduled))
     monkeypatch.setattr(
         app.schedule,
@@ -82,24 +92,26 @@ def test_run_scheduler_without_tiktok_import_job(monkeypatch: pytest.MonkeyPatch
     with pytest.raises(KeyboardInterrupt):
         app.run_scheduler()
 
-    assert called == ["migrations", "discover"]
+    assert called == ["migrations", "discover", "download_from_file"]
     assert ("00:00", "check_video_batch") in scheduled
     assert not any(job_name == "run_download_from_tiktok" for _ts, job_name in scheduled)
 
 
 @pytest.mark.integration
-def test_run_scheduler_without_tiktok_user_exits(monkeypatch: pytest.MonkeyPatch) -> None:
-    called: list[str] = []
-    monkeypatch.setattr(app, "run_migrations", lambda: called.append("migrations"))
-    monkeypatch.setattr(app, "discover_chat_id", lambda: called.append("discover"))
-    monkeypatch.setattr(app, "DOWNLOAD_FROM_TIKTOK", True)
-    monkeypatch.setattr(app, "TIKTOK_USER", "")
+def test_run_scheduler_exits_when_no_videos_after_bootstrap(
+    sqlite_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(app, "run_migrations", lambda: None)
+    monkeypatch.setattr(app, "discover_chat_id", lambda: None)
+    monkeypatch.setattr(app, "run_download_from_file", lambda: None)
+    monkeypatch.setattr(app, "get_db_session", lambda: sqlite_session)
+    monkeypatch.setattr(crud, "get_videos", lambda _db: [])
 
     with pytest.raises(SystemExit) as exc_info:
         app.run_scheduler()
 
     assert exc_info.value.code == 1
-    assert called == ["migrations", "discover"]
 
 
 @pytest.mark.integration

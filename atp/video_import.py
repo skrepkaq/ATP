@@ -16,7 +16,9 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime
+from pathlib import Path
 
 from atp import crud
 from atp.database import get_db_session, run_migrations
@@ -71,25 +73,41 @@ def parse_tiktok_json_file(file: str) -> list[dict[str, datetime]] | None:
 
 
 def import_from_file() -> None:
-    if not os.path.exists(TIKTOK_DATA_FILE):
-        logger.error("Error: file %s does not exists", TIKTOK_DATA_FILE)
-        return
-
     db = get_db_session()
 
     try:
+        db_videos = crud.get_videos(db)
+
+        if not os.path.exists(TIKTOK_DATA_FILE):
+            if db_videos:
+                logger.info("File %s does not exist, skipping import", Path(TIKTOK_DATA_FILE).name)
+            else:
+                logger.error(
+                    "Cannot import video from file: %s does not exist\n"
+                    "Please request your data from TikTok and extract %s to config/ directory\n"
+                    "https://github.com/skrepkaq/ATP#экспорт-данных-из-tiktok",
+                    Path(TIKTOK_DATA_FILE).name,
+                    Path(TIKTOK_DATA_FILE).name,
+                )
+            return
+
         videos = parse_tiktok_json_file(TIKTOK_DATA_FILE)
         if not videos:
-            logger.info(
-                "No videos found in %s "
-                "(check IMPORT_FAVORITE_VIDEOS/IMPORT_LIKED_VIDEOS and export data)",
-                TIKTOK_DATA_FILE,
+            logger.warning(
+                "No videos were imported from %s\n"
+                "Check IMPORT_FAVORITE_VIDEOS/IMPORT_LIKED_VIDEOS settings "
+                "or re-request ALL your data from TikTok\n"
+                "https://github.com/skrepkaq/ATP#экспорт-данных-из-tiktok",
+                Path(TIKTOK_DATA_FILE).name,
             )
             return
 
         try:
+            db_videos_ids = {v.id for v in db_videos}
+            videos = [v for v in videos if v["id"] not in db_videos_ids]
             crud.add_videos_bulk(db, videos)
-            logger.info("Added/checked %s videos", len(videos))
+            if videos:
+                logger.info("Added %s videos", len(videos))
         except Exception as e:
             logger.exception("Error importing videos: %s", e)
 
@@ -102,16 +120,16 @@ def import_from_file() -> None:
 def import_from_tiktok() -> None:
     db = get_db_session()
 
-    videos = crud.get_videos(db)
-    if not videos:
-        logger.info("No videos in DB. Please import using import_from_file.py")
-        # Удалить чтобы импортировать все видео из тиктока а не файла
-        # (дольше и только лайкнутые без сохранённых)
-        return
-
-    video_ids: set[str] = {v.id for v in videos}
-
     try:
+        videos = crud.get_videos(db)
+        if not videos:
+            logger.info("No videos in DB. Please import using import_from_file.py")
+            # Удалить чтобы импортировать все видео из тиктока а не файла
+            # (дольше и только лайкнутые без сохранённых)
+            return
+
+        video_ids: set[str] = {v.id for v in videos}
+
         new_videos: list[str] = []
         for video in get_user_liked_videos(TIKTOK_USER):
             new_videos.append(video["id"])
@@ -126,13 +144,15 @@ def import_from_tiktok() -> None:
                 break
     except Exception as e:
         logger.exception("Error importing from TikTok: %s", e)
-    db.close()
+    finally:
+        db.close()
 
 
-if __name__ == "__main__":
-    """Обратная совместимость для запуска через python -um atp.import_from_file"""
-    import time
-
+def deprecated_run() -> None:
+    """
+    Обратная совместимость для запуска через
+    python -um atp.import_from_file и python -m atp --download-from-file
+    """
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
     level = getattr(logging, log_level, logging.INFO)
 
@@ -143,12 +163,19 @@ if __name__ == "__main__":
         force=True,
     )
     logger.warning(
-        "\nPlease update `atp-from-file` entrypoint in compose.yaml to "
-        '["python", "-m", "atp", "--download-from-file"]\n'
+        "Deprecated run method!\n"
+        "No more need to do `docker compose up atp-from-file`\n"
+        "Import from file now works on `docker compose up`\n"
+        "\nPlease remove `atp-from-file` service from compose.yaml\n"
         "Or download a new version from https://github.com/skrepkaq/ATP/blob/master/compose.yaml\n"
-        "Old entrypoint will still work, but it's deprecated and will be removed in the future"
+        "And just run `docker compose up`\n"
+        "\nOld run method will still work, but it's deprecated and will be removed in the future"
     )
     time.sleep(5)
     run_migrations()
     import_from_file()
     download_new_videos()
+
+
+if __name__ == "__main__":
+    deprecated_run()

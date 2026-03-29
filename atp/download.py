@@ -20,10 +20,10 @@ def download_new_videos() -> None:
                 "HOPE_MODE is enabled, will try to download failed videos. This may take a while."
             )
             videos.extend(crud.get_videos(db, status=[VideoStatus.FAILED]))
-        logger.info("Found %s new%s videos", len(videos), " or failed" if HOPE_MODE else "")
-
         if not videos:
             return
+
+        logger.info("Found %s new%s videos", len(videos), " or failed" if HOPE_MODE else "")
 
         success_count = 0
         for i, video in enumerate(videos):

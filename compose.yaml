@@ -6,11 +6,3 @@ services:
       - ./config:/config
       - ./downloads:/downloads
     restart: unless-stopped
-  atp-from-file:
-    image: skrepkaq/atp
-    container_name: atp-from-file
-    entrypoint: ["python", "-m", "atp", "--download-from-file"]
-    volumes:
-      - ./config:/config
-      - ./downloads:/downloads
-    profiles: ["from-file"]
