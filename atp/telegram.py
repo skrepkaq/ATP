@@ -80,11 +80,11 @@ def edit_media(
     :return: True если успешно, False иначе
     """
     if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_CHAT_ID:
-        logger.error("Error: Telegram parameters not configured (token or chat ID)")
+        logger.error("Telegram parameters not configured (token or chat ID)")
         return False
 
     if not video and not photo:
-        logger.error("Error: Either video or photo must be provided")
+        logger.error("Either video or photo must be provided")
         return False
 
     try:

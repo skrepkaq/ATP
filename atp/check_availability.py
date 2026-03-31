@@ -59,13 +59,13 @@ def _send_multipart_video(video_parts: list[Path], caption: str) -> int:
     return message_ids[0]
 
 
-def _handle_unavailable(db: Session, video: Video) -> None:
+def _handle_unavailable(db: Session, video: Video) -> bool:
     logger.info("Video %s is no longer available!", video.id)
 
     video_path = Path(settings.DOWNLOADS_DIR) / f"{video.id}.mp4"
     if not video_path.exists():
-        logger.error("Error: video file not found: %s", video_path)
-        return
+        logger.error("Video file not found: %s", video_path)
+        return False
 
     try:
         caption = _get_caption(video)
@@ -81,7 +81,7 @@ def _handle_unavailable(db: Session, video: Video) -> None:
                 logger.error(
                     "Failed to split video. This should never happen. Create a GitHub issue"
                 )
-                return
+                return False
             msg_id = _send_multipart_video(video_parts, caption)
         else:
             with open(video_path, "rb") as video_file:
@@ -90,15 +90,15 @@ def _handle_unavailable(db: Session, video: Video) -> None:
             msg_id = result["message_id"]
             logger.info("Telegram notification sent successfully.")
 
-        crud.update_video(db, video=video, message_id=msg_id, status=VideoStatus.DELETED)
+        return crud.update_video(db, video=video, message_id=msg_id, status=VideoStatus.DELETED)
     except Exception as e:
         logger.exception("Exception occurred while sending Telegram notification: %s", e)
-        return
+        return False
     finally:
         temp_files_cleanup()
 
 
-def _handle_restored(db: Session, video: Video) -> None:
+def _handle_restored(db: Session, video: Video) -> bool:
     logger.info("Video %s has been restored!", video.id)
     if video.message_id:
         logger.info("Deleting message %s", video.message_id)
@@ -111,9 +111,9 @@ def _handle_restored(db: Session, video: Video) -> None:
             parse_mode="Markdown",
         )
         if not success:
-            return
+            return False
 
-    crud.update_video(db, video=video, message_id=None, status=VideoStatus.SUCCESS)
+    return crud.update_video(db, video=video, message_id=None, status=VideoStatus.SUCCESS)
 
 
 def check_video_batch() -> None:
@@ -149,11 +149,14 @@ def check_video_batch() -> None:
             available = not result.deleted_reason
             if available:
                 if video.status == VideoStatus.DELETED:
-                    _handle_restored(db, video)
                     restored_count += 1
-            elif video.status == VideoStatus.SUCCESS:
-                _handle_unavailable(db, video)
-                unavailable_count += 1
+                    if not _handle_restored(db, video):
+                        continue
+            else:
+                if video.status == VideoStatus.SUCCESS:
+                    unavailable_count += 1
+                    if not _handle_unavailable(db, video):
+                        continue
 
             crud.update_video(db, video=video, deleted_reason=result.deleted_reason)
 

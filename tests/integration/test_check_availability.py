@@ -28,7 +28,8 @@ def test_handle_unavailable_splits_large_video_and_marks_deleted(
     monkeypatch.setattr(check_availability, "_send_multipart_video", lambda *_args, **_kwargs: 42)
     monkeypatch.setattr(check_availability, "temp_files_cleanup", lambda: None)
 
-    check_availability._handle_unavailable(sqlite_session, video)
+    ok = check_availability._handle_unavailable(sqlite_session, video)
+    assert ok is True
 
     refreshed = crud.get_videos(sqlite_session, [VideoStatus.DELETED])[0]
     assert refreshed.message_id == 42
@@ -54,8 +55,64 @@ def test_check_video_batch_handles_unavailable_and_restored(
 
     monkeypatch.setattr(check_availability, "get_db_session", lambda: sqlite_session)
     monkeypatch.setattr(check_availability, "CHECK_INTERVAL_DAYS", 0.01)
-    unavailable_calls: list[str] = []
-    restored_calls: list[str] = []
+    monkeypatch.setattr(
+        check_availability,
+        "_handle_unavailable",
+        lambda db, video: crud.update_video(
+            db, video=video, message_id=1, status=VideoStatus.DELETED
+        ),
+    )
+    monkeypatch.setattr(
+        check_availability,
+        "_handle_restored",
+        lambda db, video: crud.update_video(
+            db, video=video, message_id=None, status=VideoStatus.SUCCESS
+        ),
+    )
+
+    def fake_check(video_id: str):
+        if video_id == "to_delete":
+            return SimpleNamespace(deleted_reason="not found")
+        return SimpleNamespace(deleted_reason=None)
+
+    monkeypatch.setattr(check_availability, "check_video_availability", fake_check)
+
+    check_availability.check_video_batch()
+
+    videos = crud.get_videos(sqlite_session, [VideoStatus.SUCCESS, VideoStatus.DELETED])
+
+    assert len(videos) == 2
+
+    assert videos[0].id == "to_delete"
+    assert videos[0].status == VideoStatus.DELETED
+    assert videos[0].message_id == 1
+    assert videos[0].last_checked is not None
+
+    assert videos[1].id == "to_restore"
+    assert videos[1].status == VideoStatus.SUCCESS
+    assert videos[1].message_id is None
+    assert videos[1].last_checked is not None
+
+
+@pytest.mark.integration
+def test_check_video_batch_no_changes_on_handlers_errors(
+    sqlite_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sqlite_session.add_all(
+        [
+            Video(id="to_delete", date=datetime(2025, 1, 1), status=VideoStatus.SUCCESS),
+            Video(
+                id="to_restore",
+                date=datetime(2025, 1, 1),
+                status=VideoStatus.DELETED,
+                message_id=10,
+            ),
+        ]
+    )
+    sqlite_session.commit()
+
+    monkeypatch.setattr(check_availability, "get_db_session", lambda: sqlite_session)
+    monkeypatch.setattr(check_availability, "CHECK_INTERVAL_DAYS", 0.01)
     monkeypatch.setattr(
         check_availability,
         "_handle_unavailable",
@@ -76,8 +133,19 @@ def test_check_video_batch_handles_unavailable_and_restored(
 
     check_availability.check_video_batch()
 
-    assert unavailable_calls == ["to_delete"]
-    assert restored_calls == ["to_restore"]
+    videos = crud.get_videos(sqlite_session, [VideoStatus.SUCCESS, VideoStatus.DELETED])
+
+    assert len(videos) == 2
+
+    assert videos[0].id == "to_delete"
+    assert videos[0].status == VideoStatus.SUCCESS
+    assert videos[0].message_id is None
+    assert videos[0].last_checked is None
+
+    assert videos[1].id == "to_restore"
+    assert videos[1].status == VideoStatus.DELETED
+    assert videos[1].message_id == 10
+    assert videos[1].last_checked is None
 
 
 @pytest.mark.integration

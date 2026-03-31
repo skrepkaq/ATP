@@ -98,7 +98,8 @@ def test_handle_unavailable_returns_when_video_file_missing(
     sqlite_session.commit()
     monkeypatch.setattr(settings, "DOWNLOADS_DIR", str(tmp_path))
 
-    check_availability._handle_unavailable(sqlite_session, video)
+    ok = check_availability._handle_unavailable(sqlite_session, video)
+    assert ok is False
 
     refreshed = crud.get_videos(sqlite_session)[0]
     assert refreshed.status == VideoStatus.SUCCESS
@@ -122,7 +123,8 @@ def test_handle_unavailable_sends_single_video_path(
     )
     monkeypatch.setattr(check_availability, "temp_files_cleanup", lambda: None)
 
-    check_availability._handle_unavailable(sqlite_session, video)
+    ok = check_availability._handle_unavailable(sqlite_session, video)
+    assert ok is True
 
     refreshed = crud.get_videos(sqlite_session, [VideoStatus.DELETED])[0]
     assert refreshed.message_id == 123
@@ -142,7 +144,8 @@ def test_handle_unavailable_returns_when_split_fails(
     monkeypatch.setattr(check_availability, "split_video", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(check_availability, "temp_files_cleanup", lambda: None)
 
-    check_availability._handle_unavailable(sqlite_session, video)
+    ok = check_availability._handle_unavailable(sqlite_session, video)
+    assert ok is False
 
     refreshed = crud.get_videos(sqlite_session)[0]
     assert refreshed.status == VideoStatus.SUCCESS
@@ -154,7 +157,8 @@ def test_handle_restored_without_message_id_updates_status(sqlite_session: Sessi
     sqlite_session.add(video)
     sqlite_session.commit()
 
-    check_availability._handle_restored(sqlite_session, video)
+    ok = check_availability._handle_restored(sqlite_session, video)
+    assert ok is True
 
     refreshed = crud.get_videos(sqlite_session, [VideoStatus.SUCCESS])[0]
     assert refreshed.message_id is None
@@ -170,7 +174,8 @@ def test_handle_restored_with_failed_edit_keeps_deleted(
     monkeypatch.setattr(check_availability, "generate_bmp", lambda _id: io.BytesIO(b"x"))
     monkeypatch.setattr(check_availability, "edit_media", lambda **kwargs: False)  # noqa: ARG005
 
-    check_availability._handle_restored(sqlite_session, video)
+    ok = check_availability._handle_restored(sqlite_session, video)
+    assert ok is False
 
     refreshed = crud.get_videos(sqlite_session, [VideoStatus.DELETED])[0]
     assert refreshed.message_id == 10
