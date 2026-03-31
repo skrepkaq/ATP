@@ -116,12 +116,12 @@ def test_check_video_batch_no_changes_on_handlers_errors(
     monkeypatch.setattr(
         check_availability,
         "_handle_unavailable",
-        lambda _db, video: unavailable_calls.append(video.id),
+        lambda _db, _video: False,
     )
     monkeypatch.setattr(
         check_availability,
         "_handle_restored",
-        lambda _db, video: restored_calls.append(video.id),
+        lambda _db, _video: False,
     )
 
     def fake_check(video_id: str):
