@@ -40,7 +40,9 @@ def parse_tiktok_json_file(file: str) -> list[dict[str, datetime]] | None:
         data = json.load(f)
 
     try:
-        activity = data.get("Likes and Favorites") or data.get("Your Activity")
+        activity = (
+            data.get("Likes and Favorites") or data.get("Your Activity") or data.get("Activity")
+        )
         videos_raw = (
             activity["Favorite Videos"]["FavoriteVideoList"]
             if IMPORT_FAVORITE_VIDEOS

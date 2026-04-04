@@ -21,7 +21,7 @@ def test_parse_tiktok_json_file_parses_and_sorts_and_deduplicates(
     _write_json(
         file,
         {
-            "Your Activity": {
+            "Activity": {
                 "Favorite Videos": {
                     "FavoriteVideoList": [
                         {
