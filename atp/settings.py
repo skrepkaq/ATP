@@ -207,6 +207,19 @@ def version_7() -> None:
         set_config_value("TIKTOK_USER", "")
 
 
+def version_8() -> None:
+    """Обновляет конфигурацию до версии 8."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+    with open(settings_file, "r+") as f:
+        config = f.readlines()
+        for i, line in enumerate(config):
+            config[i] = line.replace(". Советую поставить MAX_RETRIES=1", "")
+        f.seek(0)
+        f.writelines(config)
+        f.truncate()
+
+
 VERSIONS = [
     None,
     version_2,
@@ -215,6 +228,7 @@ VERSIONS = [
     version_5,
     version_6,
     version_7,
+    version_8,
 ]
 
 

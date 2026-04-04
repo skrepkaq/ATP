@@ -17,7 +17,7 @@ def test_download_new_videos_returns_early_when_empty(
     monkeypatch.setattr(
         download,
         "download_video",
-        lambda _id: called.__setitem__("download", True),
+        lambda _video: called.__setitem__("download", True),
     )
     download.download_new_videos()
     assert called["download"] is False
@@ -35,7 +35,7 @@ def test_download_new_videos_handles_top_level_exception(
     monkeypatch.setattr(
         download,
         "download_video",
-        lambda _id: (_ for _ in ()).throw(RuntimeError("broken")),
+        lambda _video: (_ for _ in ()).throw(RuntimeError("broken")),
     )
 
     # Must not raise because function has top-level exception handling.

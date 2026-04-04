@@ -70,8 +70,8 @@ def test_check_video_batch_handles_unavailable_and_restored(
         ),
     )
 
-    def fake_check(video_id: str):
-        if video_id == "to_delete":
+    def fake_check(video: Video):
+        if video.id == "to_delete":
             return SimpleNamespace(deleted_reason="not found")
         return SimpleNamespace(deleted_reason=None)
 
@@ -124,8 +124,8 @@ def test_check_video_batch_no_changes_on_handlers_errors(
         lambda _db, _video: False,
     )
 
-    def fake_check(video_id: str):
-        if video_id == "to_delete":
+    def fake_check(video: Video):
+        if video.id == "to_delete":
             return SimpleNamespace(deleted_reason="not found")
         return SimpleNamespace(deleted_reason=None)
 
@@ -157,7 +157,7 @@ def test_check_video_batch_no_videos_logs_and_returns(
     monkeypatch.setattr(
         check_availability,
         "check_video_availability",
-        lambda _id: called.__setitem__("checked", True),
+        lambda _video: called.__setitem__("checked", True),
     )
     check_availability.check_video_batch()
     assert called["checked"] is False
@@ -203,7 +203,7 @@ def test_check_video_batch_selects_least_recently_checked_first(
     monkeypatch.setattr(
         check_availability,
         "check_video_availability",
-        lambda _id: SimpleNamespace(deleted_reason=None),
+        lambda _video: SimpleNamespace(deleted_reason=None),
     )
 
     checked_ids: list[str] = []
@@ -277,7 +277,7 @@ def test_check_video_batch_skips_on_network_none(
     sqlite_session.commit()
     monkeypatch.setattr(check_availability, "get_db_session", lambda: sqlite_session)
     monkeypatch.setattr(check_availability, "CHECK_INTERVAL_DAYS", 0.01)
-    monkeypatch.setattr(check_availability, "check_video_availability", lambda _id: None)
+    monkeypatch.setattr(check_availability, "check_video_availability", lambda _video: None)
     calls = {"unavailable": False}
     monkeypatch.setattr(
         check_availability,

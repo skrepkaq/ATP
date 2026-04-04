@@ -29,7 +29,7 @@ def download_new_videos() -> None:
         for i, video in enumerate(videos):
             logger.info("Downloading video %s/%s: %s", i + 1, len(videos), video.id)
 
-            if not (result := download_video(video.id)):
+            if not (result := download_video(video)):
                 continue
             success = not result.deleted_reason
             status = VideoStatus.SUCCESS if success else VideoStatus.FAILED

@@ -24,15 +24,15 @@ def test_download_new_videos_updates_statuses(
     monkeypatch.setattr(download, "get_db_session", lambda: sqlite_session)
     monkeypatch.setattr(download, "HOPE_MODE", False)
 
-    def fake_download(video_id: str):
-        if video_id == "ok":
+    def fake_download(video: Video):
+        if video.id == "ok":
             return SimpleNamespace(
                 name="n1",
                 author="a1",
                 type=VideoType.VIDEO,
                 deleted_reason=None,
             )
-        if video_id == "deleted":
+        if video.id == "deleted":
             return SimpleNamespace(
                 name="n2",
                 author="a2",
@@ -69,7 +69,7 @@ def test_download_new_videos_includes_failed_in_hope_mode(
     monkeypatch.setattr(
         download,
         "download_video",
-        lambda _id: SimpleNamespace(
+        lambda _video: SimpleNamespace(
             name="x",
             author="y",
             type=VideoType.VIDEO,

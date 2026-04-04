@@ -143,7 +143,7 @@ def check_video_batch() -> None:
         for video in videos:
             logger.info("Checking video %s (%s)", video.id, video.name or "Unknown")
 
-            if not (result := check_video_availability(video.id)):
+            if not (result := check_video_availability(video)):
                 continue
 
             available = not result.deleted_reason
