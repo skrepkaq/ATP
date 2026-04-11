@@ -20,8 +20,10 @@ def test_get_error_message_reads_nested_exc_info() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("i", range(len(tiktok.COOKIE_ERRORS)))
 def test_yt_dlp_request_retries_with_cookies_on_login_error(
     monkeypatch: pytest.MonkeyPatch,
+    i: int,
 ) -> None:
     calls: list[dict] = []
 
@@ -37,7 +39,7 @@ def test_yt_dlp_request_retries_with_cookies_on_login_error(
 
         def extract_info(self, *_args, **_kwargs):
             if len(calls) == 1:
-                raise Exception(tiktok.COOKIE_ERROR)
+                raise Exception(tiktok.COOKIE_ERRORS[i])
             return {"ok": True}
 
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDL)
@@ -62,8 +64,10 @@ def test_yt_dlp_request_raises_value_error_on_no_video_id_or_username() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("always_retry", [False, True])
 def test_yt_dlp_request_raises_network_error_after_retries(
     monkeypatch: pytest.MonkeyPatch,
+    always_retry: bool,
 ) -> None:
     calls: list[dict] = []
 
@@ -86,21 +90,23 @@ def test_yt_dlp_request_raises_network_error_after_retries(
     monkeypatch.setattr(tiktok, "ANTI_BOT_BYPASS", False)
 
     with pytest.raises(tiktok.NetworkError):
-        tiktok.yt_dlp_request({}, video_id="123")
-
-    assert len(calls) == 3
-
-    calls = []
-
-    with pytest.raises(tiktok.NetworkError):
-        tiktok.yt_dlp_request({}, video_id="123", always_retry=True)
+        tiktok.yt_dlp_request({}, video_id="123", always_retry=always_retry)
 
     assert len(calls) == 3
 
 
 @pytest.mark.unit
-def test_yt_dlp_request_raises_non_network_error_without_retries(
+@pytest.mark.parametrize(
+    ("always_retry", "expected_calls"),
+    [
+        (False, 1),
+        (True, 3),
+    ],
+)
+def test_yt_dlp_request_raises_non_network_error(
     monkeypatch: pytest.MonkeyPatch,
+    always_retry: bool,
+    expected_calls: int,
 ) -> None:
     calls: list[dict] = []
 
@@ -123,39 +129,9 @@ def test_yt_dlp_request_raises_non_network_error_without_retries(
     monkeypatch.setattr(tiktok, "ANTI_BOT_BYPASS", False)
 
     with pytest.raises(ValueError, match="bad data"):
-        tiktok.yt_dlp_request({}, video_id="123")
+        tiktok.yt_dlp_request({}, video_id="123", always_retry=always_retry)
 
-    assert len(calls) == 1
-
-
-@pytest.mark.unit
-def test_yt_dlp_request_raises_non_network_error_with_always_retry(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[dict] = []
-
-    class FakeYDL:
-        def __init__(self, opts: dict):
-            calls.append(dict(opts))
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def extract_info(self, *_args, **_kwargs):
-            raise ValueError("bad data")
-
-    monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDL)
-    monkeypatch.setattr(tiktok, "MAX_RETRIES", 3)
-    monkeypatch.setattr(tiktok, "COOKIES_FILE", None)
-    monkeypatch.setattr(tiktok, "ANTI_BOT_BYPASS", False)
-
-    with pytest.raises(ValueError, match="bad data"):
-        tiktok.yt_dlp_request({}, video_id="123", always_retry=True)
-
-    assert len(calls) == 3
+    assert len(calls) == expected_calls
 
 
 @pytest.mark.unit
@@ -236,7 +212,10 @@ def test_yt_dlp_request_sets_antibot_header(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 @pytest.mark.unit
-def test_yt_dlp_request_success_after_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("always_retry", [False, True])
+def test_yt_dlp_request_success_after_network_error(
+    monkeypatch: pytest.MonkeyPatch, always_retry: bool
+) -> None:
     calls: list[dict] = []
 
     class FakeYDL:
@@ -259,11 +238,7 @@ def test_yt_dlp_request_success_after_network_error(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(tiktok, "ANTI_BOT_BYPASS", True)
     monkeypatch.setattr(tiktok, "MAX_RETRIES", 3)
 
-    assert tiktok.yt_dlp_request({}, video_id="1", always_retry=True) == {"ok": True}
-    assert len(calls) == 2
-
-    calls = []
-    assert tiktok.yt_dlp_request({}, video_id="1", always_retry=False) == {"ok": True}
+    assert tiktok.yt_dlp_request({}, video_id="1", always_retry=always_retry) == {"ok": True}
     assert len(calls) == 2
 
 
@@ -342,7 +317,18 @@ def test_download_video_sets_deleted_reason_on_generic_error(
 
 
 @pytest.mark.unit
-def test_download_video_calls_always_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("status", "expected_always_retry"),
+    [
+        (VideoStatus.NEW, True),
+        (VideoStatus.FAILED, False),
+    ],
+)
+def test_download_video_calls_always_retry(
+    monkeypatch: pytest.MonkeyPatch,
+    status: VideoStatus,
+    expected_always_retry: bool,
+) -> None:
     always_retry = None
 
     def yt_dlp_request(*_args, **kwargs):
@@ -355,12 +341,8 @@ def test_download_video_calls_always_retry(monkeypatch: pytest.MonkeyPatch) -> N
         }
 
     monkeypatch.setattr(tiktok, "yt_dlp_request", yt_dlp_request)
-    tiktok.download_video(Video(id="1", status=VideoStatus.NEW))
-    assert always_retry is True
-
-    always_retry = None
-    tiktok.download_video(Video(id="1", status=VideoStatus.FAILED))
-    assert always_retry is False
+    tiktok.download_video(Video(id="1", status=status))
+    assert always_retry is expected_always_retry
 
 
 @pytest.mark.unit
@@ -451,7 +433,16 @@ def test_check_video_availability_success(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 @pytest.mark.unit
-def test_check_video_availability_calls_always_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("status", "expected_always_retry"),
+    [
+        (VideoStatus.SUCCESS, True),
+        (VideoStatus.DELETED, False),
+    ],
+)
+def test_check_video_availability_calls_always_retry(
+    monkeypatch: pytest.MonkeyPatch, status: VideoStatus, expected_always_retry: bool
+) -> None:
     always_retry = None
 
     def yt_dlp_request(*_args, **kwargs):
@@ -464,12 +455,8 @@ def test_check_video_availability_calls_always_retry(monkeypatch: pytest.MonkeyP
         }
 
     monkeypatch.setattr(tiktok, "yt_dlp_request", yt_dlp_request)
-    tiktok.check_video_availability(Video(id="1", status=VideoStatus.SUCCESS))
-    assert always_retry is True
-
-    always_retry = None
-    tiktok.check_video_availability(Video(id="1", status=VideoStatus.DELETED))
-    assert always_retry is False
+    tiktok.check_video_availability(Video(id="1", status=status))
+    assert always_retry is expected_always_retry
 
 
 @pytest.mark.unit

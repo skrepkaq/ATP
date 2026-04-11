@@ -65,7 +65,22 @@ class NetworkError(Exception):
     pass
 
 
-COOKIE_ERROR = "Log in for access"
+COOKIE_ERRORS = [
+    "Log in for access",
+    "status code 10203",
+]
+NETWORK_ERRORS = [
+    "Read timed out",
+    "Failed to resolve",
+    "Connection reset by peer",
+    "Max retries exceeded",
+    "Temporary failure in name resolution",
+    "Connection aborted",
+    "Unable to download webpage",
+    "Unable to extract webpage video data",
+    "Unsupported URL",
+    "Failed to perform, curl",
+]
 
 
 class TikTokLikedIE(TikTokUserIE):
@@ -221,18 +236,6 @@ def yt_dlp_request(
         logger.error(error_msg)
         raise ValueError(error_msg)
 
-    network_errors = [
-        "Read timed out",
-        "Failed to resolve",
-        "Connection reset by peer",
-        "Max retries exceeded",
-        "Temporary failure in name resolution",
-        "Connection aborted",
-        "Unable to download webpage",
-        "Unable to extract webpage video data",
-        "Unsupported URL",
-        "Failed to perform, curl",
-    ]
     use_cookies = bool(username)
     if ANTI_BOT_BYPASS:
         ydl_opts["http_headers"] = {
@@ -246,15 +249,15 @@ def yt_dlp_request(
             # используем cookies только когда это необходимо
             ydl_opts["cookiefile"] = COOKIES_FILE
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL(ydl_opts.copy()) as ydl:
                 if video_id:
                     return ydl.extract_info(f"https://www.tiktok.com/@/video/{video_id}/", download)
                 elif username:
                     return TikTokLikedIE(ydl).extract(f"tiktokliked:{username}/liked")
         except Exception as e:
             error_msg = get_error_message(e)
-            is_cookies_error = COOKIE_ERROR in error_msg
-            is_network_error = any(err in str(e) for err in network_errors)
+            is_cookies_error = any(err in error_msg for err in COOKIE_ERRORS)
+            is_network_error = any(err in str(e) for err in NETWORK_ERRORS)
             is_last_attempt = attempt + 1 >= MAX_RETRIES
 
             if is_cookies_error and COOKIES_FILE and not use_cookies:
