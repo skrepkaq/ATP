@@ -12,11 +12,11 @@ from yt_dlp.utils import ExtractorError, traverse_obj
 from atp.media import render_slideshow, temp_files_cleanup
 from atp.models import Video, VideoStatus, VideoType
 from atp.settings import (
-    ANTI_BOT_BYPASS,
     COOKIES_FILE,
     DOWNLOADS_DIR,
     MAX_RETRIES,
     SLIDESHOW_TMP_DIR,
+    USER_AGENT,
 )
 
 logger = logging.getLogger(__name__)
@@ -237,10 +237,8 @@ def yt_dlp_request(
         raise ValueError(error_msg)
 
     use_cookies = bool(username)
-    if ANTI_BOT_BYPASS:
-        ydl_opts["http_headers"] = {
-            "User-Agent": "hi mom!"
-        }  # передаём привет маме создателя анти-бот защиты (хз как, но пока это работает)
+    if USER_AGENT:
+        ydl_opts["http_headers"] = {"User-Agent": USER_AGENT}
     ydl_opts["logger"] = YtDlpLogger(**ydl_opts)
 
     attempt = 0
@@ -279,7 +277,8 @@ def yt_dlp_request(
     # Достигли максимального количества сетевых ошибок
     logger.error(
         "Network error detected, skipping\n"
-        f"Try to {'disable' if ANTI_BOT_BYPASS else 'enable'} ANTI_BOT_BYPASS in settings.conf"
+        f"Try to {'change' if USER_AGENT else 'set'} USER_AGENT in settings.conf\n"
+        "Check https://github.com/skrepkaq/ATP#useragent for more information"
     )
     raise NetworkError
 
@@ -367,7 +366,9 @@ def get_user_liked_videos(username: str) -> list[dict]:
     try:
         info = yt_dlp_request(ydl_opts, username=username)
         return info.get("entries", [])
-    except Exception:
+    except Exception as e:
+        error_msg = get_error_message(e)
+        logger.error("Error importing user liked videos: %s", error_msg)
         return []
 
 
@@ -378,7 +379,7 @@ def download_slideshow(video_id: str) -> bool:
 
     # Загрузка изображений и аудио
     try:
-        job.DownloadJob(f"https://www.tiktok.com/share/video/{video_id}").run()
+        job.DownloadJob(f"https://www.tiktok.com/@/photo/{video_id}").run()
     except Exception as e:
         logger.error("Error downloading images for the slideshow: %s", e)
         return False

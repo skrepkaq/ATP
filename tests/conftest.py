@@ -13,8 +13,7 @@ _TEST_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _EXAMPLE_SETTINGS = _PROJECT_ROOT / "example.settings.conf"
 _TEST_SETTINGS = _TEST_CONFIG_DIR / "settings.conf"
-if not _TEST_SETTINGS.exists() and _EXAMPLE_SETTINGS.exists():
-    shutil.copy2(_EXAMPLE_SETTINGS, _TEST_SETTINGS)
+shutil.copy2(_EXAMPLE_SETTINGS, _TEST_SETTINGS)
 os.environ.setdefault("TEST_CONFIG_DIR", str(_TEST_CONFIG_DIR))
 
 from atp.database import Base  # noqa: E402
@@ -35,9 +34,8 @@ def downloads_dir(tmp_workspace: Path) -> Path:
 
 
 @pytest.fixture
-def sqlite_session(tmp_workspace: Path) -> Generator[Session, None, None]:
-    db_file = tmp_workspace / "test.db"
-    engine = create_engine(f"sqlite:///{db_file}")
+def sqlite_session() -> Generator[Session, None, None]:
+    engine = create_engine("sqlite:///:memory:")
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
     session = TestingSessionLocal()

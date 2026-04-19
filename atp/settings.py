@@ -220,6 +220,38 @@ def version_8() -> None:
         f.truncate()
 
 
+def version_9() -> None:
+    """Обновляет конфигурацию до версии 9."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+
+    anti_bot_bypass = False
+
+    with open(settings_file, "r+") as f:
+        config = f.readlines()
+        new_lines = []
+        for line in config:
+            if line.startswith("# Пытаться обойти анти-бот защиту тиктока"):
+                new_lines.append("# Настройки прокси и user-agent\n")
+            elif "ANTI_BOT_BYPASS" in line:
+                anti_bot_bypass = "true" in line.split("=")[1].strip()
+                new_lines.extend(
+                    [
+                        'PROXY=""\n',
+                        'USER_AGENT=""\n',
+                    ]
+                )
+            else:
+                new_lines.append(line)
+        f.seek(0)
+        f.writelines(new_lines)
+        f.truncate()
+
+    if anti_bot_bypass:
+        logger.info("ANTI_BOT_BYPASS was enabled, setting USER_AGENT to hi mom!")
+        set_config_value("USER_AGENT", "hi mom!")
+
+
 VERSIONS = [
     None,
     version_2,
@@ -229,6 +261,7 @@ VERSIONS = [
     version_6,
     version_7,
     version_8,
+    version_9,
 ]
 
 
@@ -262,8 +295,11 @@ HOPE_MODE: bool = os.getenv("HOPE_MODE", "false").lower() == "true"
 # Количество попыток при скачивании/проверке видео
 MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "3"))
 
-# Пытаться обойти анти-бот защиту тиктока
-ANTI_BOT_BYPASS: bool = os.getenv("ANTI_BOT_BYPASS", "false").lower() == "true"
+# Настройки прокси и user-agent
+PROXY: str = os.getenv("PROXY", "")
+if PROXY:
+    os.environ["ALL_PROXY"] = PROXY
+USER_AGENT = os.getenv("USER_AGENT", "")
 
 # Настройки папок и базы
 DATABASE_FILE = os.getenv("DATABASE", "tiktok_videos.db")

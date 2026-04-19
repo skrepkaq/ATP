@@ -45,7 +45,6 @@ def test_yt_dlp_request_retries_with_cookies_on_login_error(
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDL)
     monkeypatch.setattr(tiktok, "MAX_RETRIES", 1)
     monkeypatch.setattr(tiktok, "COOKIES_FILE", "/tmp/cookies.txt")
-    monkeypatch.setattr(tiktok, "ANTI_BOT_BYPASS", False)
 
     result = tiktok.yt_dlp_request({}, video_id="123")
 
@@ -87,7 +86,6 @@ def test_yt_dlp_request_raises_network_error_after_retries(
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDL)
     monkeypatch.setattr(tiktok, "MAX_RETRIES", 3)
     monkeypatch.setattr(tiktok, "COOKIES_FILE", None)
-    monkeypatch.setattr(tiktok, "ANTI_BOT_BYPASS", False)
 
     with pytest.raises(tiktok.NetworkError):
         tiktok.yt_dlp_request({}, video_id="123", always_retry=always_retry)
@@ -126,7 +124,6 @@ def test_yt_dlp_request_raises_non_network_error(
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDL)
     monkeypatch.setattr(tiktok, "MAX_RETRIES", 3)
     monkeypatch.setattr(tiktok, "COOKIES_FILE", None)
-    monkeypatch.setattr(tiktok, "ANTI_BOT_BYPASS", False)
 
     with pytest.raises(ValueError, match="bad data"):
         tiktok.yt_dlp_request({}, video_id="123", always_retry=always_retry)
@@ -169,7 +166,6 @@ def test_yt_dlp_request_raises_correct_error_after_different_errors(
 
     monkeypatch.setattr(tiktok, "MAX_RETRIES", 3)
     monkeypatch.setattr(tiktok, "COOKIES_FILE", None)
-    monkeypatch.setattr(tiktok, "ANTI_BOT_BYPASS", False)
 
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDLBadNetwork)
     with pytest.raises(tiktok.NetworkError):
@@ -190,10 +186,10 @@ def test_yt_dlp_request_raises_correct_error_after_different_errors(
 
 
 @pytest.mark.unit
-def test_yt_dlp_request_sets_antibot_header(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_yt_dlp_request_sets_user_agent_header(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeYDL:
         def __init__(self, opts: dict):
-            assert opts["http_headers"]["User-Agent"] == "hi mom!"
+            assert opts["http_headers"]["User-Agent"] == "user-agent"
 
         def __enter__(self):
             return self
@@ -205,7 +201,7 @@ def test_yt_dlp_request_sets_antibot_header(monkeypatch: pytest.MonkeyPatch) -> 
             return {"ok": True}
 
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDL)
-    monkeypatch.setattr(tiktok, "ANTI_BOT_BYPASS", True)
+    monkeypatch.setattr(tiktok, "USER_AGENT", "user-agent")
     monkeypatch.setattr(tiktok, "MAX_RETRIES", 1)
 
     assert tiktok.yt_dlp_request({}, video_id="1") == {"ok": True}
@@ -235,7 +231,6 @@ def test_yt_dlp_request_success_after_network_error(
                 return {"ok": True}
 
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDL)
-    monkeypatch.setattr(tiktok, "ANTI_BOT_BYPASS", True)
     monkeypatch.setattr(tiktok, "MAX_RETRIES", 3)
 
     assert tiktok.yt_dlp_request({}, video_id="1", always_retry=always_retry) == {"ok": True}
@@ -279,7 +274,6 @@ def test_yt_dlp_request_success_after_different_errors_with_always_retry(
             else:
                 return {"ok": True}
 
-    monkeypatch.setattr(tiktok, "ANTI_BOT_BYPASS", True)
     monkeypatch.setattr(tiktok, "MAX_RETRIES", 3)
 
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDLBadNetworkOk)

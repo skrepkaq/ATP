@@ -1,3 +1,5 @@
+import os
+from importlib import reload
 from pathlib import Path
 
 import pytest
@@ -5,6 +7,34 @@ import pytest
 from atp import settings
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "settings_migrations"
+
+
+@pytest.mark.unit
+def test_proxy_from_settings_conf_sets_all_proxy_on_module_import(tmp_path: Path) -> None:
+    """PROXY from settings.conf is applied to ALL_PROXY only when settings.py imports.
+
+    In the pytest process, ``atp.settings`` is usually already imported during test init.
+    Reloading is required to re-run module-level initialization.
+    """
+    proxy_url = "socks5://user:lox@127.0.0.1:65520"
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "settings.conf").write_text(
+        f"CONFIG_VERSION=9\nPROXY={proxy_url}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.MonkeyPatch.context() as context:
+        context.setenv("TEST_CONFIG_DIR", str(config_dir))
+        context.delenv("PROXY", raising=False)
+        context.delenv("ALL_PROXY", raising=False)
+
+        reload(settings)
+
+        assert proxy_url == settings.PROXY
+        assert os.environ.get("ALL_PROXY") == proxy_url
+
+    reload(settings)
 
 
 @pytest.mark.unit
