@@ -174,6 +174,31 @@ class TikTokLikedIE(TikTokUserIE):
                 )
                 or {}
             )
+            if not detail:
+                try:
+                    cookie_names = self._solve_challenge_and_set_cookies(webpage)
+                except ExtractorError as e:
+                    raise e
+
+                webpage = (
+                    self._download_webpage(
+                        self._UPLOADER_URL_FORMAT % user_name,
+                        user_name,
+                        "Downloading user webpage",
+                        "Unable to download user webpage",
+                        fatal=False,
+                        impersonate=True,
+                    )
+                    or ""
+                )
+                for cookie_name in filter(None, cookie_names):
+                    self.cookiejar.clear(domain=".tiktok.com", path="/", name=cookie_name)
+                detail = (
+                    traverse_obj(
+                        self._get_universal_data(webpage, user_name), ("webapp.user-detail", {dict})
+                    )
+                    or {}
+                )
             favorite_count = traverse_obj(detail, ("userInfo", "stats", "diggCount", {int}))
             if not favorite_count and detail.get("statusCode") == 10222:
                 self.raise_login_required(
