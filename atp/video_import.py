@@ -1,14 +1,9 @@
 """
-Модуль для импорта видео TikTok из файла экспорта JSON.
+Модуль для импорта видео TikTok
 
 Модуль выполняет:
-- Загрузку данных из JSON-файла экспорта TikTok
-- Обработку списка лайкнутых и сохраненных видео
-- Импорт видео в базу данных
-- Запуск процесса скачивания
-Модуль выполняет:
-- Импорт лайкнутых видео из TikTok
-- Добавление новых видео в базу данных
+- Импорт видео из JSON-файла экспорта TikTok
+- Импорт лайкнутых и сохранённых видео из TikTok
 - Запуск процесса скачивания
 """
 
@@ -17,24 +12,32 @@ import logging
 import os
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 from atp import crud
 from atp.database import get_db_session, run_migrations
 from atp.download import download_new_videos
-from atp.settings import IMPORT_FAVORITE_VIDEOS, IMPORT_LIKED_VIDEOS, TIKTOK_DATA_FILE, TIKTOK_USER
-from atp.tiktok import get_user_liked_videos
+from atp.models import Video, VideoInfo
+from atp.settings import (
+    DOWNLOAD_LIKED_VIDEOS,
+    DOWNLOAD_SAVED_VIDEOS,
+    TIKTOK_DATA_FILE,
+    TIKTOK_USER,
+)
+from atp.tiktok import get_user_liked_videos, get_user_saved_videos
 
 logger = logging.getLogger(__name__)
 
 
-def parse_tiktok_json_file(file: str) -> list[dict[str, datetime]] | None:
+def parse_tiktok_json_file(file: str) -> list[VideoInfo] | None:
     """Загружает список видео из JSON-файла экспорта TikTok.
 
     :param file: Путь к JSON-файлу с данными экспорта
 
-    :return: Список словарей с информацией о видео
+    :return: Список объектов VideoInfo
     """
     with open(file, encoding="utf-8") as f:
         data = json.load(f)
@@ -43,42 +46,42 @@ def parse_tiktok_json_file(file: str) -> list[dict[str, datetime]] | None:
         activity = (
             data.get("Likes and Favorites") or data.get("Your Activity") or data.get("Activity")
         )
-        videos_raw = (
-            activity["Favorite Videos"]["FavoriteVideoList"]
-            if IMPORT_FAVORITE_VIDEOS
-            else []
-        ) + (
-            activity["Like List"]["ItemFavoriteList"]
-            if IMPORT_LIKED_VIDEOS
-            else []
+        saved_videos = (
+            activity["Favorite Videos"]["FavoriteVideoList"] if DOWNLOAD_SAVED_VIDEOS else []
+        )
+        liked_videos = (
+            activity["Like List"]["ItemFavoriteList"] if DOWNLOAD_LIKED_VIDEOS else []
         )  # fmt: skip
     except (KeyError, TypeError) as e:
         logger.error("JSON error: %s", e)
         return None
 
-    videos: list[dict[str, datetime]] = []
-    ids: set[str] = set()
-    for video in videos_raw:
-        date_str = video.get("date") or video["Date"]
-        date = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+    videos: dict[str, VideoInfo] = {}
+    for source_videos, liked, saved in (
+        (liked_videos, True, False),
+        (saved_videos, False, True),
+    ):
+        for video in source_videos:
+            date_str = video.get("date") or video["Date"]
+            video_link = video.get("link") or video["Link"]
 
-        video_link = video.get("link") or video["Link"]
-        video_id = video_link.split("/")[-2]
+            date = datetime.fromisoformat(date_str)
+            video_id = video_link.split("/")[-2]
+            info = videos.get(video_id)
+            if info:
+                info.liked = info.liked or liked
+                info.saved = info.saved or saved
+            else:
+                videos[video_id] = VideoInfo(id=video_id, date=date, liked=liked, saved=saved)
 
-        if video_id in ids:
-            continue
-
-        ids.add(video_id)
-        videos.append({"id": video_id, "date": date})
-
-    return sorted(videos, key=lambda v: v["date"])
+    return sorted(videos.values(), key=lambda v: v.date)
 
 
 def import_from_file() -> None:
     db = get_db_session()
 
     try:
-        db_videos = crud.get_videos(db)
+        db_videos: dict[str, Video] = {v.id: v for v in crud.get_videos(db)}
 
         if not os.path.exists(TIKTOK_DATA_FILE):
             if db_videos:
@@ -97,7 +100,7 @@ def import_from_file() -> None:
         if not videos:
             logger.warning(
                 "No videos were imported from %s\n"
-                "Check IMPORT_FAVORITE_VIDEOS/IMPORT_LIKED_VIDEOS settings "
+                "Check DOWNLOAD_SAVED_VIDEOS/DOWNLOAD_LIKED_VIDEOS settings "
                 "or re-request ALL your data from TikTok\n"
                 "https://github.com/skrepkaq/ATP#экспорт-данных-из-tiktok",
                 Path(TIKTOK_DATA_FILE).name,
@@ -105,11 +108,22 @@ def import_from_file() -> None:
             return
 
         try:
-            db_videos_ids = {v.id for v in db_videos}
-            videos = [v for v in videos if v["id"] not in db_videos_ids]
-            crud.add_videos_bulk(db, videos)
-            if videos:
-                logger.info("Added %s videos", len(videos))
+            videos_to_add: list[VideoInfo] = []
+            videos_to_update: list[VideoInfo] = []
+
+            for video in videos:
+                db_video = db_videos.get(video.id)
+                if not db_video:
+                    videos_to_add.append(video)
+                elif (video.liked and not db_video.liked) or (video.saved and not db_video.saved):
+                    # Никогда не обновляем liked и saved на False
+                    videos_to_update.append(video)
+            if videos_to_add:
+                crud.add_videos_bulk(db, videos_to_add)
+                logger.info("Added %s videos", len(videos_to_add))
+            if videos_to_update:
+                crud.update_video_sources_bulk(db, videos_to_update)
+                logger.info("Updated sources for %s videos", len(videos_to_update))
         except Exception as e:
             logger.exception("Error importing videos: %s", e)
 
@@ -119,35 +133,87 @@ def import_from_file() -> None:
         db.close()
 
 
-def import_from_tiktok() -> None:
+def import_from_tiktok_source(
+    importer: Callable[[str], list[dict]], source: Literal["liked", "saved"]
+) -> None:
+    """Импортирует видео из источника TikTok.
+    :param importer: Функция для получения списка видео
+    :param source: Источник видео (liked или saved)
+
+    Импортируем до тех пор пока видео не закончатся
+    или пока не наткнёмся на 10 видео подряд которые уже есть в БД с тем же источником
+      (видео уже были импортированы как лайкнутые/сохранённые)
+    или пока не наткнёмся на 100 видео подряд которые уже есть в БД
+      (вероятно видео уже были импортированы, но c другим/без источника.
+       Теоретически может сломаться если сохранить N видео, потом одновременно
+       лайкнуть и сохранить 100 видео, не лайкать больше ничего и запуcтить импорт.
+       Тогда те самые N видео не будут импортированы.
+       Если бы мы импортировали пока все статусы не будут актуальны
+       первый импорт, когда у видео нет статуса, занял бы вечность)
+    """
     db = get_db_session()
 
     try:
-        videos = crud.get_videos(db)
-        if not videos:
-            logger.info("No videos in DB. Please import using import_from_file.py")
-            # Удалить чтобы импортировать все видео из тиктока а не файла
-            # (дольше и только лайкнутые без сохранённых)
+        videos = {v.id: v for v in crud.get_videos(db)}
+        existing_videos: set[str] = set(videos.keys())
+        existing_same_source_videos: set[str] = {
+            id for id, video in videos.items() if getattr(video, source) is True
+        }
+
+        if not existing_same_source_videos:
+            logger.info("No %s videos in DB. Please import using import_from_file.py", source)
             return
 
-        video_ids: set[str] = {v.id for v in videos}
-
         new_videos: list[str] = []
-        for video in get_user_liked_videos(TIKTOK_USER):
-            new_videos.append(video["id"])
+        for video in importer(TIKTOK_USER):
+            video = VideoInfo(
+                id=video["id"],
+                date=datetime.fromtimestamp(video["timestamp"]),
+                liked=source == "liked",
+                saved=source == "saved",
+            )
+            new_videos.append(video.id)
 
-            if video["id"] not in video_ids:
-                logger.info("Import video %s", video["id"])
-                crud.add_video_to_db(db, video["id"], datetime.fromtimestamp(video["timestamp"]))
+            if video.id not in existing_videos:
+                logger.info("Importing video %s", video.id)
+                crud.add_video_to_db(
+                    db,
+                    video.id,
+                    video.date,
+                    liked=video.liked,
+                    saved=video.saved,
+                )
+            elif video.id not in existing_same_source_videos:
+                logger.info("Updating video sources for %s", video.id)
+                crud.update_video(
+                    db,
+                    videos[video.id],
+                    update_last_checked=False,
+                    liked=video.liked,
+                    saved=video.saved,
+                )
 
-            if len(new_videos) >= 20 and set(new_videos[-20:]).issubset(video_ids):
-                # Все 20 последних видео уже есть в БД, ливаем
-                logger.info("No new videos, exiting")
-                break
+            if len(new_videos) >= 10 and set(new_videos[-10:]).issubset(
+                existing_same_source_videos
+            ):
+                # Все 10 последних видео c тем же источником уже есть в БД, ливаем
+                logger.info("No new %s videos, exiting", source)
+                return
+            if len(new_videos) >= 100 and set(new_videos[-100:]).issubset(existing_videos):
+                # Все 100 последних видео уже есть в БД, ливаем
+                logger.info("No new %s videos, exiting (long import)", source)
+                return
     except Exception as e:
-        logger.exception("Error importing from TikTok: %s", e)
+        logger.exception("Error importing %s videos from TikTok: %s", source, e)
     finally:
         db.close()
+
+
+def import_from_tiktok() -> None:
+    if DOWNLOAD_LIKED_VIDEOS:
+        import_from_tiktok_source(get_user_liked_videos, "liked")
+    if DOWNLOAD_SAVED_VIDEOS:
+        import_from_tiktok_source(get_user_saved_videos, "saved")
 
 
 def deprecated_run() -> None:

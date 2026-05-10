@@ -1,16 +1,21 @@
-import collections
 import itertools
 import logging
 import re
+import time
+import urllib.parse
 from pathlib import Path
 
 import yt_dlp
 from gallery_dl import config, job
 from yt_dlp.extractor.tiktok import TikTokIE, TikTokUserIE
-from yt_dlp.utils import ExtractorError, traverse_obj
+from yt_dlp.utils import (
+    ExtractorError,
+    int_or_none,
+)
+from yt_dlp.utils.traversal import traverse_obj
 
 from atp.media import render_slideshow, temp_files_cleanup
-from atp.models import Video, VideoStatus, VideoType
+from atp.models import Video, VideoInfo, VideoStatus, VideoType
 from atp.settings import (
     COOKIES_FILE,
     DOWNLOADS_DIR,
@@ -54,11 +59,6 @@ class YtDlpLogger:
         logger.error(msg)
 
 
-VideoInfo = collections.namedtuple(
-    "VideoInfo", ["name", "author", "type", "deleted_reason"], defaults=[None, None, None, None]
-)
-
-
 class NetworkError(Exception):
     """Исключение при сетевых ошибках."""
 
@@ -83,25 +83,66 @@ NETWORK_ERRORS = [
 ]
 
 
-class TikTokLikedIE(TikTokUserIE):
-    IE_NAME = "tiktok:liked"
-    _VALID_URL = (
-        r"(?:tiktokliked:|https?://(?:www\.)?tiktok\.com/@)(?P<id>[\w.-]+)/liked/?(?:$|[#?])"
+class TikTokUserBaseIE(TikTokUserIE):
+    _CURSOR_SCALE = 1000  # cursor is in milliseconds
+    _FAIL_EARLY_MESSAGE = (
+        "This user's account is likely either private or all of their videos are private. "
+        "Log into an account that has access"
     )
 
-    _API_BASE_URL = "https://www.tiktok.com/api/favorite/item_list"
+    def _extract_universal_data(self, url, display_id=None, fatal=True):
+        def get_webpage(note):
+            res = self._download_webpage_handle(
+                url, display_id, note, fatal=fatal, impersonate=True
+            )
+            if res is False:
+                return False
 
-    def _build_web_query(self, sec_uid, cursor):
-        query = super()._build_web_query(sec_uid, cursor)
-        query.pop("type", None)
-        query["count"] = 35
-        return query
+            webpage, urlh = res
+            if urllib.parse.urlparse(urlh.url).path == "/login":
+                message = "TikTok is requiring login for access to this content"
+                if fatal:
+                    self.raise_login_required(message)
+                self.report_warning(f"{message}. {self._login_hint()}", video_id=display_id)
+                return False
 
-    def _entries(self, sec_uid, user_name):
+            return webpage
+
+        webpage = get_webpage(note="Downloading webpage")
+        if webpage is False:
+            return None
+
+        universal_data = self._get_universal_data(webpage, display_id)
+        if not universal_data:
+            try:
+                cookie_names = self._solve_challenge_and_set_cookies(webpage)
+            except ExtractorError as e:
+                if fatal:
+                    raise
+                self.report_warning(e.orig_msg, video_id=display_id)
+                return None
+
+            webpage = get_webpage(note="Downloading webpage with challenge cookie")
+            # Manually clear challenge cookies that should expire immediately after webpage request
+            for cookie_name in filter(None, cookie_names):
+                self.cookiejar.clear(domain=".tiktok.com", path="/", name=cookie_name)
+            if webpage is False:
+                return None
+            universal_data = self._get_universal_data(webpage, display_id)
+
+        if not universal_data:
+            message = "Unable to extract universal data for rehydration"
+            if fatal:
+                raise ExtractorError(message)
+            self.report_warning(message, video_id=display_id)
+            return None
+        return universal_data
+
+    def _entries(self, sec_uid, user_name, fail_early=False):
         display_id = user_name or sec_uid
         seen_ids = set()
 
-        cursor = 0
+        cursor = int(time.time() * self._CURSOR_SCALE)
         for page in itertools.count(1):
             for retry in self.RetryManager():
                 response = self._download_json(
@@ -114,13 +155,7 @@ class TikTokLikedIE(TikTokUserIE):
                 # Avoid infinite loop caused by bad device_id
                 # See: https://github.com/yt-dlp/yt-dlp/issues/14031
                 current_batch = sorted(traverse_obj(response, ("itemList", ..., "id", {str})))
-                if not current_batch:
-                    raise ExtractorError(
-                        "This user's liked videos are not open to the public. "
-                        "Open it or log into this account",
-                        expected=True,
-                    )
-                if current_batch == sorted(seen_ids):
+                if current_batch and current_batch == sorted(seen_ids):
                     message = "TikTok API keeps sending the same page"
                     if self._KNOWN_DEVICE_ID:
                         raise ExtractorError(
@@ -137,93 +172,113 @@ class TikTokLikedIE(TikTokUserIE):
                 if video_id in seen_ids:
                     continue
                 seen_ids.add(video_id)
-                webpage_url = self._create_url(user_id=None, video_id=video_id)
+                author = (
+                    traverse_obj(video, ("author", ("uniqueId", "secUid", "id"), {str}, any)) or "_"
+                )
+                webpage_url = self._create_url(author, video_id)
                 yield self.url_result(
                     webpage_url,
                     TikTokIE,
                     **self._parse_aweme_video_web(video, webpage_url, video_id, extract_flat=True),
                 )
 
-            if not response.get("hasMore"):
+            cursor = self._get_cursor(response, cursor)
+            if not cursor:
                 return
 
-            old_cursor = cursor
-            cursor = response.get("cursor")
-            if not cursor or cursor == old_cursor:
+            if not traverse_obj(response, (("hasMore", "hasMorePrevious"), {bool}, any)):
                 return
+
+            # This code path is ideally only reached when one of the following is true:
+            # 1. TikTok profile is private or has likes closed and webpage detection
+            #    was bypassed due to a tiktokuser:sec_uid or tiktokliked:sec_uid URL
+            # 2. TikTok profile is *not* private but all of their videos are private
+            if fail_early and not seen_ids:
+                self.raise_login_required(self._FAIL_EARLY_MESSAGE)
+
+    def _get_cursor(self, response, old_cursor):
+        cursor = int_or_none(response.get("cursor"))
+        if not cursor or old_cursor == cursor:
+            # User may not have posted within this ~1 week lookback, so manually adjust cursor
+            cursor = old_cursor - 7 * 86_400 * self._CURSOR_SCALE
+        # In case 'hasMorePrevious' is wrong, break if we have gone back before TikTok existed
+        if cursor < 1472706000 * self._CURSOR_SCALE:
+            return None
+        return cursor
+
+
+class TikTokLikedIE(TikTokUserBaseIE):
+    IE_NAME = "tiktok:liked"
+    _VALID_URL = r"tiktokliked:(?P<username>[\w.-]+)|https?://(?:www\.)?tiktok\.com/@(?P<username2>[\w.-]+)/liked/?"
+    _FAIL_EARLY_MESSAGE = (
+        "This user's account is likely private, has likes hidden, "
+        "or all of their likes are private. "
+        "Open likes to the public or log into this account"
+    )
+    _API_BASE_URL = "https://www.tiktok.com/api/favorite/item_list/"
 
     def _real_extract(self, url):
-        user_name, sec_uid = self._match_id(url), None
+        user_name, user_name2 = self._match_valid_url(url).group("username", "username2")
+        user_name, sec_uid = user_name or user_name2, None
         if re.fullmatch(r"MS4wLjABAAAA[\w-]{64}", user_name):
             user_name, sec_uid = None, user_name
+            fail_early = True
         else:
-            webpage = (
-                self._download_webpage(
-                    self._UPLOADER_URL_FORMAT % user_name,
-                    user_name,
-                    "Downloading user webpage",
-                    "Unable to download user webpage",
-                    fatal=False,
-                    impersonate=True,
-                )
-                or ""
-            )
-            detail = (
-                traverse_obj(
-                    self._get_universal_data(webpage, user_name), ("webapp.user-detail", {dict})
+            fail_early = False
+            universal_data = (
+                self._extract_universal_data(
+                    self._UPLOADER_URL_FORMAT % user_name, user_name, fatal=False
                 )
                 or {}
             )
-            if not detail:
-                try:
-                    cookie_names = self._solve_challenge_and_set_cookies(webpage)
-                except ExtractorError as e:
-                    raise e
-
-                webpage = (
-                    self._download_webpage(
-                        self._UPLOADER_URL_FORMAT % user_name,
-                        user_name,
-                        "Downloading user webpage",
-                        "Unable to download user webpage",
-                        fatal=False,
-                        impersonate=True,
-                    )
-                    or ""
-                )
-                for cookie_name in filter(None, cookie_names):
-                    self.cookiejar.clear(domain=".tiktok.com", path="/", name=cookie_name)
-                detail = (
-                    traverse_obj(
-                        self._get_universal_data(webpage, user_name), ("webapp.user-detail", {dict})
-                    )
-                    or {}
-                )
-            favorite_count = traverse_obj(detail, ("userInfo", "stats", "diggCount", {int}))
-            if not favorite_count and detail.get("statusCode") == 10222:
+            detail = traverse_obj(universal_data, ("webapp.user-detail", {dict})) or {}
+            likes_count = traverse_obj(
+                detail, ("userInfo", ("stats", "statsV2"), "diggCount", {int_or_none}, any)
+            )
+            if not likes_count and detail.get("statusCode") == 10222:
                 self.raise_login_required(
                     "This user's account is private. Log into an account that has access"
                 )
-            elif favorite_count == 0:
-                raise ExtractorError(
-                    "This user's liked videos are not open to the public. "
-                    "Open it or log into this account",
-                    expected=True,
+            elif likes_count == 0:
+                self.raise_login_required(
+                    "This user's liked videos are private. "
+                    "Open likes to the public or log into this account",
                 )
-
             sec_uid = traverse_obj(detail, ("userInfo", "user", "secUid", {str}))
             if not sec_uid:
                 sec_uid = self._extract_sec_uid_from_embed(user_name)
 
-            if not sec_uid:
-                raise ExtractorError(
-                    "Unable to extract secondary user ID. If you are able to get the channel_id "
-                    'from a video posted by this user, try using "tiktokliked:channel_id/liked" '
-                    "as the input URL (replacing `channel_id` with its actual value)",
-                    expected=True,
-                )
+        if not sec_uid:
+            raise ExtractorError(
+                "Unable to extract secondary user ID. If you are able to get the channel_id "
+                'from a video posted by this user, try using "tiktokliked:channel_id" as the '
+                "input URL (replacing `channel_id` with its actual value)",
+                expected=True,
+            )
 
-        return self.playlist_result(self._entries(sec_uid, user_name), sec_uid, user_name)
+        return self.playlist_result(
+            self._entries(sec_uid, user_name, fail_early), sec_uid, user_name
+        )
+
+
+class TikTokSavedIE(TikTokUserBaseIE):
+    IE_NAME = "tiktok:saved"
+    _VALID_URL = r"https?://(?:www\.)?tiktok\.com/saved/?|:tiktoksaved"
+    _CURSOR_SCALE = 1  # cursor is in seconds
+    _API_BASE_URL = "https://www.tiktok.com/api/user/collect/item_list/"
+
+    def _real_extract(self, _url):
+        universal_data = self._extract_universal_data(self._WEBPAGE_HOST, fatal=False) or {}
+
+        user_name = traverse_obj(universal_data, ("webapp.app-context", "user", "uniqueId", {str}))
+        sec_uid = traverse_obj(universal_data, ("webapp.app-context", "user", "secUid", {str}))
+
+        if not (user_name or sec_uid):
+            self.raise_login_required("You are not logged in. Log into an account that has access")
+
+        return self.playlist_result(
+            self._entries(sec_uid, user_name, fail_early=True), sec_uid, user_name
+        )
 
 
 def get_error_message(e: Exception) -> str:
@@ -239,29 +294,23 @@ def get_error_message(e: Exception) -> str:
 
 def yt_dlp_request(
     ydl_opts: dict[str, any],
-    video_id: str | None = None,
-    username: str | None = None,
+    url: str,
     download: bool = False,
+    use_cookies: bool = False,
     always_retry: bool = False,
 ) -> dict[str, any] | list[dict[str, any]]:
     """Выполняет запрос к yt-dlp с обработкой сетевых ошибок.
 
     :param ydl_opts: Опции для yt-dlp
-    :param video_id: ID видео
-    :param username: Имя пользователя
+    :param url: URL для запроса
     :param download: Флаг скачивания
+    :param use_cookies: Флаг использования cookies
     :param always_retry: Retry при не сетевых ошибках
     :return: Информация о видео или список видео
 
     :raises NetworkError: При сетевых ошибках
     :raises Exception: При других ошибках
     """
-    if not (video_id or username):
-        error_msg = "Either video_id or username must be provided"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-
-    use_cookies = bool(username)
     if USER_AGENT:
         ydl_opts["http_headers"] = {"User-Agent": USER_AGENT}
     ydl_opts["logger"] = YtDlpLogger(**ydl_opts)
@@ -273,10 +322,15 @@ def yt_dlp_request(
             ydl_opts["cookiefile"] = COOKIES_FILE
         try:
             with yt_dlp.YoutubeDL(ydl_opts.copy()) as ydl:
-                if video_id:
-                    return ydl.extract_info(f"https://www.tiktok.com/@/video/{video_id}/", download)
-                elif username:
-                    return TikTokLikedIE(ydl).extract(f"tiktokliked:{username}/liked")
+                match url:  # tmp пока код не замерджили в yt-dlp
+                    case url if url.startswith("https://www.tiktok.com/@/video/"):
+                        return ydl.extract_info(url, process=download)
+                    case url if url.startswith("tiktokliked:"):
+                        return TikTokLikedIE(ydl).extract(url)
+                    case url if url.startswith(":tiktoksaved"):
+                        return TikTokSavedIE(ydl).extract(url)
+                    case _:
+                        raise ValueError(f"Invalid URL: {url}")
         except Exception as e:
             error_msg = get_error_message(e)
             is_cookies_error = any(err in error_msg for err in COOKIE_ERRORS)
@@ -290,8 +344,11 @@ def yt_dlp_request(
 
             if is_network_error or always_retry:
                 logger.warning(
-                    f"Error requesting {'video' if video_id else 'user'} {video_id or username} "
-                    f"(attempt {attempt + 1}/{MAX_RETRIES}): {error_msg}"
+                    "Error requesting %s (attempt %s/%s): %s",
+                    url,
+                    attempt + 1,
+                    MAX_RETRIES,
+                    error_msg,
                 )
 
             if not is_network_error and (is_last_attempt or not always_retry):
@@ -318,13 +375,12 @@ def check_video_availability(video: Video) -> VideoInfo | None:
     ydl_opts = {
         "quiet": True,
         "no_warnings": True,
-        "skip_download": True,
     }
 
     try:
         yt_dlp_request(
             ydl_opts,
-            video_id=video.id,
+            url=f"https://www.tiktok.com/@/video/{video.id}",
             always_retry=video.status == VideoStatus.SUCCESS,
         )
         return VideoInfo(deleted_reason=None)
@@ -354,7 +410,7 @@ def download_video(video: Video) -> VideoInfo | None:
     try:
         info = yt_dlp_request(
             ydl_opts,
-            video_id=video.id,
+            url=f"https://www.tiktok.com/@/video/{video.id}",
             download=True,
             always_retry=video.status == VideoStatus.NEW,
         )
@@ -376,24 +432,48 @@ def download_video(video: Video) -> VideoInfo | None:
 
 
 def get_user_liked_videos(username: str) -> list[dict]:
-    """Получает список ID видео, которые пользователь отметил как понравившиеся.
+    """Получает список видео, которые пользователь отметил как понравившиеся.
 
     :param username: Имя пользователя
 
-    :return: Список ID видео
+    :return: Список видео
     """
     ydl_opts = {
         "quiet": False,
         "no_warnings": False,
-        "skip_download": True,
     }
 
     try:
-        info = yt_dlp_request(ydl_opts, username=username)
+        info = yt_dlp_request(ydl_opts, url=f"tiktokliked:{username}", use_cookies=True)
         return info.get("entries", [])
     except Exception as e:
         error_msg = get_error_message(e)
         logger.error("Error importing user liked videos: %s", error_msg)
+        return []
+
+
+def get_user_saved_videos(_username: str | None = None) -> list[dict]:
+    """Получает список видео, которые пользователь сохранил.
+
+    :param _username: Имя пользователя (не используется, нужен для совместимости с get_liked_videos)
+
+    :return: Список видео
+    """
+    ydl_opts = {
+        "quiet": False,
+        "no_warnings": False,
+    }
+
+    if not COOKIES_FILE:
+        logger.warning("No cookies file found, skipping import saved videos")
+        return []
+
+    try:
+        info = yt_dlp_request(ydl_opts, url=":tiktoksaved", use_cookies=True)
+        return info.get("entries", [])
+    except Exception as e:
+        error_msg = get_error_message(e)
+        logger.error("Error importing user saved videos: %s", error_msg)
         return []
 
 

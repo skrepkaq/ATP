@@ -46,20 +46,11 @@ def test_yt_dlp_request_retries_with_cookies_on_login_error(
     monkeypatch.setattr(tiktok, "MAX_RETRIES", 1)
     monkeypatch.setattr(tiktok, "COOKIES_FILE", "/tmp/cookies.txt")
 
-    result = tiktok.yt_dlp_request({}, video_id="123")
+    result = tiktok.yt_dlp_request({}, "https://www.tiktok.com/@/video/123")
 
     assert result == {"ok": True}
     assert "cookiefile" not in calls[0]
     assert calls[1]["cookiefile"] == "/tmp/cookies.txt"
-
-
-@pytest.mark.unit
-def test_yt_dlp_request_raises_value_error_on_no_video_id_or_username() -> None:
-    with pytest.raises(ValueError, match="Either video_id or username must be provided"):
-        tiktok.yt_dlp_request({})
-
-    with pytest.raises(ValueError, match="Either video_id or username must be provided"):
-        tiktok.yt_dlp_request({}, username="")
 
 
 @pytest.mark.unit
@@ -88,7 +79,7 @@ def test_yt_dlp_request_raises_network_error_after_retries(
     monkeypatch.setattr(tiktok, "COOKIES_FILE", None)
 
     with pytest.raises(tiktok.NetworkError):
-        tiktok.yt_dlp_request({}, video_id="123", always_retry=always_retry)
+        tiktok.yt_dlp_request({}, "https://www.tiktok.com/@/video/123", always_retry=always_retry)
 
     assert len(calls) == 3
 
@@ -126,7 +117,7 @@ def test_yt_dlp_request_raises_non_network_error(
     monkeypatch.setattr(tiktok, "COOKIES_FILE", None)
 
     with pytest.raises(ValueError, match="bad data"):
-        tiktok.yt_dlp_request({}, video_id="123", always_retry=always_retry)
+        tiktok.yt_dlp_request({}, "https://www.tiktok.com/@/video/123", always_retry=always_retry)
 
     assert len(calls) == expected_calls
 
@@ -169,19 +160,19 @@ def test_yt_dlp_request_raises_correct_error_after_different_errors(
 
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDLBadNetwork)
     with pytest.raises(tiktok.NetworkError):
-        tiktok.yt_dlp_request({}, video_id="123", always_retry=True)
+        tiktok.yt_dlp_request({}, "https://www.tiktok.com/@/video/123", always_retry=True)
     assert len(calls) == 3
 
     calls = []
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDLNetworkBad)
     with pytest.raises(ValueError, match="bad data"):
-        tiktok.yt_dlp_request({}, video_id="123", always_retry=False)
+        tiktok.yt_dlp_request({}, "https://www.tiktok.com/@/video/123", always_retry=False)
     assert len(calls) == 2
 
     calls = []
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDLNetworkBad)
     with pytest.raises(ValueError, match="bad data"):
-        tiktok.yt_dlp_request({}, video_id="123", always_retry=True)
+        tiktok.yt_dlp_request({}, "https://www.tiktok.com/@/video/123", always_retry=True)
     assert len(calls) == 3
 
 
@@ -204,7 +195,7 @@ def test_yt_dlp_request_sets_user_agent_header(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(tiktok, "USER_AGENT", "user-agent")
     monkeypatch.setattr(tiktok, "MAX_RETRIES", 1)
 
-    assert tiktok.yt_dlp_request({}, video_id="1") == {"ok": True}
+    assert tiktok.yt_dlp_request({}, "https://www.tiktok.com/@/video/1") == {"ok": True}
 
 
 @pytest.mark.unit
@@ -233,7 +224,9 @@ def test_yt_dlp_request_success_after_network_error(
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDL)
     monkeypatch.setattr(tiktok, "MAX_RETRIES", 3)
 
-    assert tiktok.yt_dlp_request({}, video_id="1", always_retry=always_retry) == {"ok": True}
+    assert tiktok.yt_dlp_request(
+        {}, "https://www.tiktok.com/@/video/1", always_retry=always_retry
+    ) == {"ok": True}
     assert len(calls) == 2
 
 
@@ -277,12 +270,16 @@ def test_yt_dlp_request_success_after_different_errors_with_always_retry(
     monkeypatch.setattr(tiktok, "MAX_RETRIES", 3)
 
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDLBadNetworkOk)
-    assert tiktok.yt_dlp_request({}, video_id="1", always_retry=True) == {"ok": True}
+    assert tiktok.yt_dlp_request({}, "https://www.tiktok.com/@/video/1", always_retry=True) == {
+        "ok": True
+    }
     assert len(calls) == 3
 
     calls = []
     monkeypatch.setattr(tiktok.yt_dlp, "YoutubeDL", FakeYDLNetworkBadOk)
-    assert tiktok.yt_dlp_request({}, video_id="1", always_retry=True) == {"ok": True}
+    assert tiktok.yt_dlp_request({}, "https://www.tiktok.com/@/video/1", always_retry=True) == {
+        "ok": True
+    }
     assert len(calls) == 3
 
 
@@ -471,6 +468,37 @@ def test_get_user_liked_videos_success(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda *args, **kwargs: {"entries": [{"id": "1"}]},  # noqa: ARG005
     )
     assert tiktok.get_user_liked_videos("u") == [{"id": "1"}]
+
+
+@pytest.mark.unit
+def test_get_user_saved_videos_returns_empty_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        tiktok,
+        "yt_dlp_request",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("x")),  # noqa: ARG005
+    )
+    assert tiktok.get_user_saved_videos("u") == []
+
+
+@pytest.mark.unit
+def test_get_user_saved_videos_returns_empty_on_no_cookies(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        tiktok,
+        "yt_dlp_request",
+        lambda *args, **kwargs: {"entries": [{"id": "1"}]},  # noqa: ARG005
+    )
+    assert tiktok.get_user_saved_videos() == []
+
+
+@pytest.mark.unit
+def test_get_user_saved_videos_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        tiktok,
+        "yt_dlp_request",
+        lambda *args, **kwargs: {"entries": [{"id": "1"}]},  # noqa: ARG005
+    )
+    monkeypatch.setattr(tiktok, "COOKIES_FILE", "/tmp/cookies.txt")
+    assert tiktok.get_user_saved_videos() == [{"id": "1"}]
 
 
 @pytest.mark.unit

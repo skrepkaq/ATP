@@ -252,6 +252,24 @@ def version_9() -> None:
         set_config_value("USER_AGENT", "hi mom!")
 
 
+def version_10() -> None:
+    """Обновляет конфигурацию до версии 10."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+    with open(settings_file, "r+") as f:
+        config = f.readlines()
+        for i, line in enumerate(config):
+            config[i] = (
+                line
+                .replace("Настройки импорта видео", "Настройки загрузки видео")
+                .replace("IMPORT_LIKED_VIDEOS", "DOWNLOAD_LIKED_VIDEOS")
+                .replace("IMPORT_FAVORITE_VIDEOS", "DOWNLOAD_SAVED_VIDEOS")
+            )  # fmt: skip
+        f.seek(0)
+        f.writelines(config)
+        f.truncate()
+
+
 VERSIONS = [
     None,
     version_2,
@@ -262,6 +280,7 @@ VERSIONS = [
     version_7,
     version_8,
     version_9,
+    version_10,
 ]
 
 
@@ -278,8 +297,8 @@ config_dir = load_config()
 
 # Настройки импорта видео
 TIKTOK_USER: str = os.getenv("TIKTOK_USER", "")
-IMPORT_LIKED_VIDEOS: bool = os.getenv("IMPORT_LIKED_VIDEOS", "true").lower() == "true"
-IMPORT_FAVORITE_VIDEOS: bool = os.getenv("IMPORT_FAVORITE_VIDEOS", "true").lower() == "true"
+DOWNLOAD_LIKED_VIDEOS: bool = os.getenv("DOWNLOAD_LIKED_VIDEOS", "true").lower() == "true"
+DOWNLOAD_SAVED_VIDEOS: bool = os.getenv("DOWNLOAD_SAVED_VIDEOS", "true").lower() == "true"
 
 # Настройки Telegram
 TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -320,8 +339,8 @@ if not os.path.isabs(TIKTOK_DATA_FILE):
 COOKIES_FILE: str | None = os.getenv("COOKIES_FILE", "cookies.txt")
 if not os.path.isabs(COOKIES_FILE):
     COOKIES_FILE = str(config_dir / COOKIES_FILE)
-    if not os.path.exists(COOKIES_FILE):
-        COOKIES_FILE = None
+if not os.path.exists(COOKIES_FILE):
+    COOKIES_FILE = None
 
 SLIDESHOW_TMP_DIR: Path = Path(tempfile.gettempdir()) / "gallery_dl"
 PARTS_TMP_DIR: Path = Path(tempfile.gettempdir()) / "video_parts"

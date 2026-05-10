@@ -9,7 +9,7 @@ from atp import crud
 from atp.check_availability import check_video_batch
 from atp.database import get_db_session, run_migrations
 from atp.download import download_new_videos
-from atp.settings import TIKTOK_USER
+from atp.settings import COOKIES_FILE, DOWNLOAD_LIKED_VIDEOS, DOWNLOAD_SAVED_VIDEOS, TIKTOK_USER
 from atp.telegram import discover_chat_id
 from atp.video_import import import_from_file, import_from_tiktok
 
@@ -46,10 +46,21 @@ def run_scheduler() -> None:
 
     schedule.every().hour.at("00:00").do(check_video_batch)
 
-    if TIKTOK_USER:
-        schedule.every().hour.at("30:00").do(run_download_from_tiktok)
-    else:
+    if not TIKTOK_USER:
         logger.warning("TIKTOK_USER is missing! Importing videos from TikTok is disabled")
+    elif not DOWNLOAD_LIKED_VIDEOS and not DOWNLOAD_SAVED_VIDEOS:
+        logger.warning(
+            "DOWNLOAD_LIKED_VIDEOS and DOWNLOAD_SAVED_VIDEOS are disabled! "
+            "Skipping import from TikTok"
+        )
+    else:
+        if DOWNLOAD_SAVED_VIDEOS and not COOKIES_FILE:
+            logger.warning(
+                "DOWNLOAD_SAVED_VIDEOS is enabled, but COOKIES_FILE is missing!\n"
+                "For more information please visit https://github.com/skrepkaq/ATP#cookies"
+            )
+
+        schedule.every().hour.at("30:00").do(run_download_from_tiktok)
 
     logger.info("ATP archiver has been started!")
     while True:

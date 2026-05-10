@@ -1,6 +1,7 @@
+from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 
 from atp.database import Base
 
@@ -15,6 +16,18 @@ class VideoStatus:
 class VideoType:
     VIDEO = "video"
     SLIDESHOW = "slideshow"
+
+
+@dataclass
+class VideoInfo:
+    id: str | None = None
+    name: str | None = None
+    date: datetime | None = None
+    type: str | None = None
+    author: str | None = None
+    liked: bool | None = None
+    saved: bool | None = None
+    deleted_reason: str | None = None
 
 
 class Video(Base):
@@ -40,6 +53,8 @@ class Video(Base):
     status: str = Column(String, nullable=False, default=VideoStatus.NEW)
     type: str | None = Column(String, nullable=True)
     author: str | None = Column(String, nullable=True)
+    liked: bool = Column(Boolean, nullable=False, default=False)
+    saved: bool = Column(Boolean, nullable=False, default=False)
     created_at: datetime = Column(DateTime, default=lambda: datetime.now())
     last_checked: datetime | None = Column(DateTime, nullable=True)
     message_id: int | None = Column(Integer, nullable=True)

@@ -98,6 +98,37 @@ def test_run_scheduler_without_tiktok_user_warns_and_skips_tiktok_job(
 
 
 @pytest.mark.integration
+def test_run_scheduler_without_download_liked_and_saved_warns_and_skips_tiktok_job(
+    sqlite_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called: list[str] = []
+    scheduled: list[tuple[str, str]] = []
+    monkeypatch.setattr(app, "DOWNLOAD_LIKED_VIDEOS", False)
+    monkeypatch.setattr(app, "DOWNLOAD_SAVED_VIDEOS", False)
+    monkeypatch.setattr(app, "run_migrations", lambda: called.append("migrations"))
+    monkeypatch.setattr(app, "discover_chat_id", lambda: called.append("discover"))
+    monkeypatch.setattr(app, "run_download_from_file", lambda: called.append("download_from_file"))
+    monkeypatch.setattr(app, "get_db_session", lambda: sqlite_session)
+    monkeypatch.setattr(crud, "get_videos", lambda _db: [object()])
+    monkeypatch.setattr(app, "TIKTOK_USER", "u")
+    monkeypatch.setattr(app.schedule, "every", lambda: _FakeJob(scheduled))
+    monkeypatch.setattr(
+        app.schedule,
+        "run_pending",
+        lambda: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+    monkeypatch.setattr(app.time, "sleep", lambda _s: None)
+
+    with pytest.raises(KeyboardInterrupt):
+        app.run_scheduler()
+
+    assert called == ["migrations", "discover", "download_from_file"]
+    assert ("00:00", "check_video_batch") in scheduled
+    assert not any(job_name == "run_download_from_tiktok" for _ts, job_name in scheduled)
+
+
+@pytest.mark.integration
 def test_run_scheduler_exits_when_no_videos_after_bootstrap(
     sqlite_session: Session,
     monkeypatch: pytest.MonkeyPatch,
