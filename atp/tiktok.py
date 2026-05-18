@@ -80,6 +80,7 @@ NETWORK_ERRORS = [
     "Unable to extract webpage video data",
     "Unsupported URL",
     "Failed to perform, curl",
+    "Unexpected response from webpage request",
 ]
 
 
