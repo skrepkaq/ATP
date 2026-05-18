@@ -57,12 +57,13 @@ def test_render_slideshow_success_copies_output(
     slide_dir.mkdir()
     out_dir.mkdir()
     (slide_dir / "1.jpg").write_bytes(b"jpg")
+    (slide_dir / "2.jpg").write_bytes(b"jpg")
     (slide_dir / "audio.mp3").write_bytes(b"mp3")
 
     monkeypatch.setattr(media, "SLIDESHOW_TMP_DIR", slide_dir)
     monkeypatch.setattr(media, "DOWNLOADS_DIR", str(out_dir))
-    monkeypatch.setattr(media.os, "listdir", lambda _p: ["1.jpg"])
-    monkeypatch.setattr(media, "_probe_duration", lambda _p: 2.5)
+    monkeypatch.setattr(media.os, "listdir", lambda _p: ["1.jpg", "2.jpg"])
+    monkeypatch.setattr(media, "_probe_duration", lambda _p: 10.0)
 
     class FakeOutput:
         def overwrite_output(self):
@@ -71,10 +72,33 @@ def test_render_slideshow_success_copies_output(
         def run(self, **_kwargs):
             (slide_dir / "output.mp4").write_bytes(b"mp4")
 
-    monkeypatch.setattr(media.ffmpeg, "input", lambda *args, **kwargs: object())  # noqa: ARG005
-    monkeypatch.setattr(media.ffmpeg, "output", lambda *args, **kwargs: FakeOutput())  # noqa: ARG005
+    slide_inputs: list[tuple[str, dict]] = []
+
+    class FakeStream:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+    def fake_input(path, **kwargs):
+        if str(path).endswith(".jpg"):
+            slide_inputs.append((str(path), kwargs))
+        return FakeStream()
+
+    output_kwargs: dict = {}
+
+    def fake_output(*_args, **kwargs):
+        output_kwargs.update(kwargs)
+        return FakeOutput()
+
+    monkeypatch.setattr(media.ffmpeg, "input", fake_input)
+    monkeypatch.setattr(media.ffmpeg, "concat", lambda *_streams, **_kwargs: FakeStream())
+    monkeypatch.setattr(media.ffmpeg, "output", fake_output)
 
     assert media.render_slideshow("vid") is True
+    assert len(slide_inputs) == 2
+    assert slide_inputs[0][1]["loop"] == 1
+    assert slide_inputs[0][1]["t"] == 3
+    assert slide_inputs[1][1]["t"] == 7
+    assert "vf" not in output_kwargs
     assert (out_dir / "vid.mp4").exists()
 
 

@@ -36,10 +36,28 @@ def _probe_duration(media_path: Path) -> float | None:
         return None
 
 
+def _slide_duration(
+    index: int, image_count: int, slide_duration: float, hold_last_frame: float
+) -> float:
+    if index == image_count - 1:
+        return slide_duration + hold_last_frame
+    return slide_duration
+
+
+def _prepare_slide(path: Path, duration: float):
+    return (
+        ffmpeg.input(str(path), loop=1, t=duration, framerate=30)
+        .filter("scale", 1080, 1920, force_original_aspect_ratio="decrease")
+        .filter("pad", 1080, 1920, "(ow-iw)/2", "(oh-ih)/2")
+        .filter("format", "yuv420p")
+        .filter("setsar", 1)
+    )
+
+
 def render_slideshow(video_id: str) -> bool:
     """Рендерит слайдшоу из изображений и аудио"""
     image_files: list[str] = [f for f in os.listdir(SLIDESHOW_TMP_DIR) if f.endswith(".jpg")]
-    image_files.sort()
+    image_files.sort(key=lambda f: int(os.path.splitext(f)[0]))
     image_count = len(image_files)
 
     if not image_files:
@@ -56,25 +74,31 @@ def render_slideshow(video_id: str) -> bool:
 
     # Рассчитываем интервал в диапазоне [2, 3] сек
     t = max(2, min(3, sound_len / image_count))
-    total_video_len = max(t * image_count, sound_len)
+    slideshow_len = t * image_count
+    total_video_len = max(slideshow_len, sound_len)
+    hold_last_frame = total_video_len - slideshow_len
 
-    vf = (
-        "scale=iw*min(1080/iw\\,1920/ih):ih*min(1080/iw\\,1920/ih),"
-        "pad=1080:1920:(1080-iw*min(1080/iw\\,1920/ih))/2:(1920-ih*min(1080/iw\\,1920/ih))/2,"
-        "format=yuv420p"
-    )
+    slides = [
+        _prepare_slide(
+            SLIDESHOW_TMP_DIR / name,
+            _slide_duration(index, image_count, t, hold_last_frame),
+        )
+        for index, name in enumerate(image_files)
+    ]
+    video = ffmpeg.concat(*slides, v=1, a=0)
 
     logger.info("Rendering slideshow: %d images, %d seconds total", image_count, total_video_len)
 
     try:
         (
             ffmpeg.output(
-                ffmpeg.input(str(SLIDESHOW_TMP_DIR / "%01d.jpg"), framerate=1 / t),
+                video,
                 ffmpeg.input(str(audio_path)),
                 str(SLIDESHOW_TMP_DIR / "output.mp4"),
-                vf=vf,
-                r=30,
+                g=900,
                 acodec="aac",
+                vcodec="libx264",
+                tune="stillimage",
                 t=total_video_len,
                 loglevel="error",
             )
