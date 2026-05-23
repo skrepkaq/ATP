@@ -3,6 +3,7 @@ import logging
 import re
 import time
 import urllib.parse
+from datetime import datetime
 from pathlib import Path
 
 import yt_dlp
@@ -38,9 +39,12 @@ config.set(
 
 
 class YtDlpLogger:
-    def __init__(self, quiet: bool = False, no_warnings: bool = False, **_):
+    def __init__(
+        self, quiet: bool = False, no_warnings: bool = False, no_errors: bool = False, **_
+    ):
         self.quiet = quiet
         self.no_warnings = no_warnings
+        self.no_errors = no_errors
 
     def debug(self, msg: str) -> None:
         if self.quiet:
@@ -56,6 +60,8 @@ class YtDlpLogger:
         logger.warning(msg)
 
     def error(self, msg: str) -> None:
+        if self.no_errors:
+            return
         logger.error(msg)
 
 
@@ -343,7 +349,7 @@ def yt_dlp_request(
                 use_cookies = True
                 continue
 
-            if is_network_error or always_retry:
+            if (is_network_error or always_retry) and not ydl_opts.get("no_errors"):
                 logger.warning(
                     "Error requesting %s (attempt %s/%s): %s",
                     url,
@@ -366,30 +372,38 @@ def yt_dlp_request(
     raise NetworkError
 
 
-def check_video_availability(video: Video) -> VideoInfo | None:
+def check_video_availability(video: Video, no_errors: bool = False) -> VideoInfo | None:
     """Проверяет доступность видео TikTok.
 
     :param video: Видео
+    :param no_errors: Не выводить ошибки
 
     :return: Информация о видео или None при сетевой ошибке
     """
     ydl_opts = {
         "quiet": True,
         "no_warnings": True,
+        "no_errors": no_errors,
     }
 
     try:
-        yt_dlp_request(
+        info = yt_dlp_request(
             ydl_opts,
             url=f"https://www.tiktok.com/@/video/{video.id}",
             always_retry=video.status == VideoStatus.SUCCESS,
         )
-        return VideoInfo(deleted_reason=None)
+        return VideoInfo(
+            deleted_reason=None,
+            date=datetime.fromtimestamp(info["timestamp"])
+            if info.get("timestamp") is not None
+            else None,
+        )
     except NetworkError:
         return None
     except Exception as e:
         error_msg = get_error_message(e)
-        logger.error("Error checking video %s: %s", video.id, error_msg)
+        if not no_errors:
+            logger.error("Error checking video %s: %s", video.id, error_msg)
         return VideoInfo(deleted_reason=error_msg)
 
 

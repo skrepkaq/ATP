@@ -270,6 +270,14 @@ def version_10() -> None:
         f.truncate()
 
 
+def version_11() -> None:
+    """Обновляет конфигурацию до версии 11."""
+    config_dir = get_config_dir()
+    settings_file = config_dir / "settings.conf"
+    with open(settings_file, "a") as f:
+        f.write("\nCHECK_TIKTOK_AVAILABILITY=true\n")
+
+
 VERSIONS = [
     None,
     version_2,
@@ -281,6 +289,7 @@ VERSIONS = [
     version_8,
     version_9,
     version_10,
+    version_11,
 ]
 
 
@@ -297,8 +306,8 @@ config_dir = load_config()
 
 # Настройки импорта видео
 TIKTOK_USER: str = os.getenv("TIKTOK_USER", "").replace("@", "").strip()
-DOWNLOAD_LIKED_VIDEOS: bool = os.getenv("DOWNLOAD_LIKED_VIDEOS", "true").lower() == "true"
-DOWNLOAD_SAVED_VIDEOS: bool = os.getenv("DOWNLOAD_SAVED_VIDEOS", "true").lower() == "true"
+DOWNLOAD_LIKED_VIDEOS: bool = os.getenv("DOWNLOAD_LIKED_VIDEOS", "false").lower() == "true"
+DOWNLOAD_SAVED_VIDEOS: bool = os.getenv("DOWNLOAD_SAVED_VIDEOS", "false").lower() == "true"
 
 # Настройки Telegram
 TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -319,6 +328,7 @@ PROXY: str = os.getenv("PROXY", "")
 if PROXY:
     os.environ["ALL_PROXY"] = PROXY
 USER_AGENT = os.getenv("USER_AGENT", "")
+CHECK_TIKTOK_AVAILABILITY: bool = os.getenv("CHECK_TIKTOK_AVAILABILITY", "false").lower() == "true"
 
 # Настройки папок и базы
 DATABASE_FILE = os.getenv("DATABASE", "tiktok_videos.db")
@@ -341,6 +351,31 @@ if not os.path.isabs(COOKIES_FILE):
     COOKIES_FILE = str(config_dir / COOKIES_FILE)
 if not os.path.exists(COOKIES_FILE):
     COOKIES_FILE = None
+
+# Список популярных видео с аккаунта @tiktok
+KNOWN_GOOD_TIKTOKS = [
+    7624178064527740190,
+    7622064700431289630,
+    7622051063377546527,
+    7621658376077888798,
+    7621282555890814238,
+    7619450446956006686,
+    7617895203818556702,
+    7616875015815826718,
+    7616779488235408671,
+    7615325926091443487,
+    7610491084011097375,
+    7609062596628483359,
+    7609005511958088991,
+    7607552555073260830,
+    7602713277616934175,
+    7601302444773100831,
+    7584163316084313374,
+    7582997183398432031,
+    7582814954814786846,
+    7581937754620120350,
+]
+
 
 SLIDESHOW_TMP_DIR: Path = Path(tempfile.gettempdir()) / "gallery_dl"
 PARTS_TMP_DIR: Path = Path(tempfile.gettempdir()) / "video_parts"

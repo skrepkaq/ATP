@@ -417,10 +417,30 @@ def test_check_video_availability_returns_reason_on_error(
 
 @pytest.mark.unit
 def test_check_video_availability_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(tiktok, "yt_dlp_request", lambda *args, **kwargs: {"ok": 1})  # noqa: ARG005
+    monkeypatch.setattr(
+        tiktok,
+        "yt_dlp_request",
+        lambda *args, **kwargs: {"timestamp": 1_700_000_000},  # noqa: ARG005
+    )
     result = tiktok.check_video_availability(Video(id="1", status=VideoStatus.SUCCESS))
     assert result is not None
     assert result.deleted_reason is None
+    assert result.date is not None
+
+
+@pytest.mark.unit
+def test_check_video_availability_passes_no_errors_to_ydl_opts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict = {}
+
+    def yt_dlp_request(ydl_opts, *_args, **_kwargs):
+        captured.update(ydl_opts)
+        return {}
+
+    monkeypatch.setattr(tiktok, "yt_dlp_request", yt_dlp_request)
+    tiktok.check_video_availability(Video(id="1", status=VideoStatus.SUCCESS), no_errors=True)
+    assert captured["no_errors"] is True
 
 
 @pytest.mark.unit

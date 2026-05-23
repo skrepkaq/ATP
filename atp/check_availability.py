@@ -1,9 +1,12 @@
 import io
 import logging
 import math
+import random
 import time
+from datetime import datetime
 from pathlib import Path
 
+import requests
 from sqlalchemy.orm import Session
 
 from atp import crud, settings
@@ -15,6 +18,49 @@ from atp.telegram import edit_media, send_media
 from atp.tiktok import check_video_availability
 
 logger = logging.getLogger(__name__)
+
+
+def check_services_availability() -> bool:
+    """Проверяет доступность TikTok и Telegram"""
+    if not settings.CHECK_TIKTOK_AVAILABILITY:
+        return True
+
+    # до этой даты видео почему то были доступны, никто не знает что случилось?
+    VIDEO_AVAILABLE_BEFORE = datetime(2022, 3, 1)
+
+    db = get_db_session()
+    db_videos = sorted(
+        crud.get_videos(db, status=[VideoStatus.SUCCESS]),
+        key=lambda v: (v.date is not None, v.date),
+    )
+    db_videos = [video.id for video in db_videos if video.date > VIDEO_AVAILABLE_BEFORE]
+    videos = (
+        random.sample(db_videos[-100:], min(10, len(db_videos)))
+        + random.sample(settings.KNOWN_GOOD_TIKTOKS, 20)
+    )[:20]  # fmt: skip
+
+    for i, video in enumerate(videos):
+        result = check_video_availability(Video(id=video, status=VideoStatus.NEW), no_errors=True)
+        if result and result.deleted_reason is None and result.date > VIDEO_AVAILABLE_BEFORE:
+            return True
+        if i == 0:
+            logger.info("Checking TikTok availability, please wait...")
+
+    logger.error("Checked %s TikTok videos, found 0 available", len(videos))
+
+    try:
+        requests.get("https://telegram.org", timeout=3)
+    except Exception:
+        logger.error("Telegram is not available")
+
+    logger.error(
+        "TikTok is likely unavailable in your region, please set up VPN or proxy.\n"
+        "For more information, see: https://github.com/skrepkaq/ATP#proxy\n"
+        "If you are sure that TikTok is available, you can "
+        "disable this check by setting CHECK_TIKTOK_AVAILABILITY=false in your settings.conf"
+    )
+
+    return False
 
 
 def _get_caption(video: Video) -> str:
@@ -121,6 +167,9 @@ def check_video_batch() -> None:
     db = get_db_session()
 
     try:
+        if not check_services_availability():
+            return
+
         all_videos = sorted(
             crud.get_videos(db, status=[VideoStatus.SUCCESS, VideoStatus.DELETED]),
             key=lambda v: (v.last_checked is not None, v.last_checked),

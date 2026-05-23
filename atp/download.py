@@ -1,6 +1,7 @@
 import logging
 
 from atp import crud
+from atp.check_availability import check_services_availability
 from atp.database import get_db_session
 from atp.models import VideoStatus
 from atp.settings import HOPE_MODE
@@ -14,6 +15,9 @@ def download_new_videos() -> None:
     db = get_db_session()
 
     try:
+        if not check_services_availability():
+            return
+
         videos = crud.get_videos(db, status=[VideoStatus.NEW])
         if HOPE_MODE:
             logger.info(

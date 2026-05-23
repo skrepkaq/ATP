@@ -149,7 +149,7 @@ python3 -m atp
 
 ### Proxy
 
-Если из вашей сети недоступен TikTok/Telegram, настройте proxy
+Если из вашей сети недоступен TikTok/Telegram, настройте proxy (или VPN)
 
 Добавьте `PROXY` в `config/settings.conf`, например:
 

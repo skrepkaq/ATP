@@ -19,6 +19,11 @@ os.environ.setdefault("TEST_CONFIG_DIR", str(_TEST_CONFIG_DIR))
 from atp.database import Base  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def disable_tiktok_availability_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("atp.settings.CHECK_TIKTOK_AVAILABILITY", False)
+
+
 @pytest.fixture
 def tmp_workspace(tmp_path: Path) -> Path:
     root = tmp_path / "workspace"

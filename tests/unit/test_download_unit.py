@@ -40,3 +40,24 @@ def test_download_new_videos_handles_top_level_exception(
 
     # Must not raise because function has top-level exception handling.
     download.download_new_videos()
+
+
+@pytest.mark.unit
+def test_download_new_videos_returns_when_services_unavailable(
+    sqlite_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sqlite_session.add(Video(id="v1", date=datetime(2025, 1, 1), status=VideoStatus.NEW))
+    sqlite_session.commit()
+    monkeypatch.setattr(download, "get_db_session", lambda: sqlite_session)
+    monkeypatch.setattr(download, "HOPE_MODE", False)
+    monkeypatch.setattr(download, "check_services_availability", lambda: False)
+    called = {"download": False}
+    monkeypatch.setattr(
+        download,
+        "download_video",
+        lambda _video: called.__setitem__("download", True),
+    )
+
+    download.download_new_videos()
+
+    assert called["download"] is False
