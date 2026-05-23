@@ -296,7 +296,7 @@ def upgrade_config() -> None:
 config_dir = load_config()
 
 # Настройки импорта видео
-TIKTOK_USER: str = os.getenv("TIKTOK_USER", "")
+TIKTOK_USER: str = os.getenv("TIKTOK_USER", "").replace("@", "").strip()
 DOWNLOAD_LIKED_VIDEOS: bool = os.getenv("DOWNLOAD_LIKED_VIDEOS", "true").lower() == "true"
 DOWNLOAD_SAVED_VIDEOS: bool = os.getenv("DOWNLOAD_SAVED_VIDEOS", "true").lower() == "true"
 

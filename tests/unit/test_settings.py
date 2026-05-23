@@ -107,3 +107,36 @@ def test_get_config_version_reads_value(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setattr(settings, "get_config_dir", lambda: config_dir)
 
     assert settings.get_config_version() == 6
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("raw_env", "expected"),
+    [
+        ("@myuser", "myuser"),
+        ("  @myuser  ", "myuser"),
+        ("user@handle", "userhandle"),
+    ],
+)
+def test_tiktok_user_strips_at_and_whitespace_from_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    raw_env: str,
+    expected: str,
+) -> None:
+    """TIKTOK_USER normalizes os.environ via .replace('@', '').strip() at import time."""
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "settings.conf").write_text("CONFIG_VERSION=12\n", encoding="utf-8")
+
+    monkeypatch.setenv("TEST_CONFIG_DIR", str(config_dir))
+    monkeypatch.setenv("TIKTOK_USER", raw_env)
+    monkeypatch.delenv("PROXY", raising=False)
+    monkeypatch.delenv("ALL_PROXY", raising=False)
+
+    reload(settings)
+
+    try:
+        assert expected == settings.TIKTOK_USER
+    finally:
+        reload(settings)
