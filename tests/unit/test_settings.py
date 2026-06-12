@@ -140,3 +140,89 @@ def test_tiktok_user_strips_at_and_whitespace_from_env(
         assert expected == settings.TIKTOK_USER
     finally:
         reload(settings)
+
+
+@pytest.mark.unit
+def test_check_dir_permission_ok(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    good_dir = tmp_path / "good"
+    good_dir.mkdir()
+
+    settings.check_dir_permission(good_dir)
+
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.unit
+def test_check_dir_permission_missing_path(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    missing = tmp_path / "missing"
+
+    settings.check_dir_permission(missing)
+
+    out = capsys.readouterr().out
+    assert f"Directory {missing} does not exist" in out
+    assert f"Path {missing} is not a directory" in out
+    assert "is not writable" in out
+
+
+@pytest.mark.unit
+def test_check_dir_permission_not_a_directory(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    file_path = tmp_path / "file.txt"
+    file_path.write_text("x", encoding="utf-8")
+
+    settings.check_dir_permission(file_path)
+
+    out = capsys.readouterr().out
+    assert f"Path {file_path} is not a directory" in out
+    assert f"Directory {file_path} does not exist" not in out
+
+
+@pytest.mark.unit
+def test_check_dir_permission_not_writable(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    read_only = tmp_path / "readonly"
+    read_only.mkdir()
+    read_only.chmod(0o555)
+    try:
+        settings.check_dir_permission(read_only)
+
+        out = capsys.readouterr().out
+        assert f"Error: {read_only} is not writable" in out
+        assert "1000:1000" in out
+    finally:
+        read_only.chmod(0o755)
+
+
+@pytest.mark.unit
+def test_load_config_permission_error_exits(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+
+    monkeypatch.setenv("TEST_CONFIG_DIR", str(config_dir))
+
+    def raise_permission_error(_src: Path, _dst: Path) -> None:
+        raise PermissionError("Permission denied")
+
+    monkeypatch.setattr(settings.shutil, "copy2", raise_permission_error)
+
+    def fake_exit(code: int) -> None:
+        raise SystemExit(code)
+
+    monkeypatch.setattr(settings.sys, "exit", fake_exit)
+
+    with pytest.raises(SystemExit) as exc_info:
+        settings.load_config()
+
+    assert exc_info.value.code == 1
+    out = capsys.readouterr().out
+    assert "Error copying example settings: Permission denied" in out
+    assert "Please check the permissions of the config directory" in out
+    assert f"Error: {config_dir} is not writable" not in out

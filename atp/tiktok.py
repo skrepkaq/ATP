@@ -364,11 +364,12 @@ def yt_dlp_request(
             attempt += 1
 
     # Достигли максимального количества сетевых ошибок
-    logger.error(
-        "Network error detected, skipping\n"
-        f"Try to {'change' if USER_AGENT else 'set'} USER_AGENT in settings.conf\n"
-        "Check https://github.com/skrepkaq/ATP#useragent for more information"
-    )
+    if not ydl_opts.get("no_errors"):
+        logger.error(
+            "Network error detected, skipping\n"
+            f"Try to {'change' if USER_AGENT else 'set'} USER_AGENT in settings.conf\n"
+            "Check https://github.com/skrepkaq/ATP#useragent for more information"
+        )
     raise NetworkError
 
 

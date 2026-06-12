@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import shutil
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -22,6 +23,19 @@ def _get_project_root() -> Path:
     :return: Путь к корню проекта
     """
     return Path(__file__).parent.parent
+
+
+def check_dir_permission(path: Path) -> None:
+    if not path.exists():
+        print(f"Directory {path} does not exist")
+    if not path.is_dir():
+        print(f"Path {path} is not a directory")
+    if not os.access(path, os.W_OK | os.X_OK):
+        print(
+            f"Error: {path} is not writable\n"
+            "Please check the permissions of the directory (it should be accessible to 1000:1000)\n"
+            "Recreate directory or chown it to 1000:1000 and restart the application"
+        )
 
 
 def get_config_dir() -> Path:
@@ -54,7 +68,15 @@ def load_config() -> Path:
     settings_path = config_dir / "settings.conf"
     example_path = _get_project_root() / "example.settings.conf"
     if not settings_path.exists() and example_path.exists():
-        shutil.copy2(example_path, settings_path)
+        try:
+            shutil.copy2(example_path, settings_path)
+        except PermissionError as e:
+            print(
+                f"Error copying example settings: {e}\n"
+                "Please check the permissions of the config directory and try again."
+            )
+            check_dir_permission(config_dir)
+            sys.exit(1)
         print(
             f"Created {settings_path} from example. "
             "Please configure it before use and restart the application."
@@ -383,3 +405,6 @@ PARTS_TMP_DIR: Path = Path(tempfile.gettempdir()) / "video_parts"
 os.makedirs(SLIDESHOW_TMP_DIR, exist_ok=True)
 os.makedirs(PARTS_TMP_DIR, exist_ok=True)
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+
+check_dir_permission(get_config_dir())
+check_dir_permission(Path(DOWNLOADS_DIR))
