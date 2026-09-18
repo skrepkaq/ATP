@@ -66,40 +66,146 @@ def test_render_slideshow_success_copies_output(
     monkeypatch.setattr(media, "_probe_duration", lambda _p: 10.0)
 
     class FakeOutput:
+        def __init__(self, path: str):
+            self.path = path
+
+        def overwrite_output(self):
+            return self
+
+        def run(self, **_kwargs):
+            Path(self.path).write_bytes(b"mp4")
+
+    outputs: list[tuple[str, dict]] = []
+
+    class FakeStream:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+    def fake_output(*args, **kwargs):
+        out_path = args[-1]
+        outputs.append((str(out_path), kwargs))
+        return FakeOutput(out_path)
+
+    monkeypatch.setattr(media.ffmpeg, "input", lambda *_args, **_kwargs: FakeStream())
+    monkeypatch.setattr(media.ffmpeg, "output", fake_output)
+
+    assert media.render_slideshow("vid") is True
+    concat = (slide_dir / "concat.txt").read_text()
+    assert concat.startswith("ffconcat version 1.0")
+    assert concat.count("file ") == 3
+    assert "duration 3" in concat
+    assert "duration 7" in concat
+    assert len(outputs) == 1
+    assert outputs[0][1]["vcodec"] == "libx264"
+    assert outputs[0][1]["acodec"] == "aac"
+    assert outputs[0][1]["fps_mode"] == "cfr"
+    assert outputs[0][1]["r"] == 30
+    assert outputs[0][1]["movflags"] == "+faststart"
+    assert "scale=1080:1920" in outputs[0][1]["vf"]
+    assert (out_dir / "vid.mp4").exists()
+
+
+@pytest.mark.unit
+def test_render_slideshow_returns_false_on_ffmpeg_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    slide_dir = tmp_path / "slides"
+    out_dir = tmp_path / "out"
+    slide_dir.mkdir()
+    out_dir.mkdir()
+    (slide_dir / "1.jpg").write_bytes(b"jpg")
+    (slide_dir / "audio.mp3").write_bytes(b"mp3")
+
+    monkeypatch.setattr(media, "SLIDESHOW_TMP_DIR", slide_dir)
+    monkeypatch.setattr(media, "DOWNLOADS_DIR", str(out_dir))
+    monkeypatch.setattr(media.os, "listdir", lambda _p: ["1.jpg"])
+    monkeypatch.setattr(media, "_probe_duration", lambda _p: 10.0)
+
+    class FakeStream:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+    class FakeOutput:
+        def overwrite_output(self):
+            return self
+
+        def run(self, **_kwargs):
+            raise ffmpeg.Error("ffmpeg", b"", b"boom")
+
+    monkeypatch.setattr(media.ffmpeg, "input", lambda *_args, **_kwargs: FakeStream())
+    monkeypatch.setattr(media.ffmpeg, "output", lambda *_args, **_kwargs: FakeOutput())
+
+    assert media.render_slideshow("vid") is False
+    assert not (out_dir / "vid.mp4").exists()
+
+
+@pytest.mark.unit
+def test_render_slideshow_single_image_loops_instead_of_concat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    slide_dir = tmp_path / "slides"
+    out_dir = tmp_path / "out"
+    slide_dir.mkdir()
+    out_dir.mkdir()
+    (slide_dir / "1.jpg").write_bytes(b"jpg")
+    (slide_dir / "audio.mp3").write_bytes(b"mp3")
+
+    monkeypatch.setattr(media, "SLIDESHOW_TMP_DIR", slide_dir)
+    monkeypatch.setattr(media, "DOWNLOADS_DIR", str(out_dir))
+    monkeypatch.setattr(media.os, "listdir", lambda _p: ["1.jpg"])
+    monkeypatch.setattr(media, "_probe_duration", lambda _p: 10.0)
+
+    inputs: list[tuple[str, dict]] = []
+    outputs: list[dict] = []
+
+    class FakeStream:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+    class FakeOutput:
         def overwrite_output(self):
             return self
 
         def run(self, **_kwargs):
             (slide_dir / "output.mp4").write_bytes(b"mp4")
 
-    slide_inputs: list[tuple[str, dict]] = []
-
-    class FakeStream:
-        def filter(self, *_args, **_kwargs):
-            return self
-
     def fake_input(path, **kwargs):
-        if str(path).endswith(".jpg"):
-            slide_inputs.append((str(path), kwargs))
+        inputs.append((str(path), kwargs))
         return FakeStream()
 
-    output_kwargs: dict = {}
-
     def fake_output(*_args, **kwargs):
-        output_kwargs.update(kwargs)
+        outputs.append(kwargs)
         return FakeOutput()
 
     monkeypatch.setattr(media.ffmpeg, "input", fake_input)
-    monkeypatch.setattr(media.ffmpeg, "concat", lambda *_streams, **_kwargs: FakeStream())
     monkeypatch.setattr(media.ffmpeg, "output", fake_output)
 
-    assert media.render_slideshow("vid") is True
-    assert len(slide_inputs) == 2
-    assert slide_inputs[0][1]["loop"] == 1
-    assert slide_inputs[0][1]["t"] == 3
-    assert slide_inputs[1][1]["t"] == 7
-    assert "vf" not in output_kwargs
-    assert (out_dir / "vid.mp4").exists()
+    assert media.render_slideshow("one") is True
+    assert not (slide_dir / "concat.txt").exists()
+    image_in = next(kwargs for path, kwargs in inputs if path.endswith("1.jpg"))
+    assert image_in["loop"] == 1
+    assert image_in["t"] == 10.0
+    assert image_in["framerate"] == 30
+    assert outputs[0]["movflags"] == "+faststart"
+
+
+@pytest.mark.unit
+def test_concat_file_line_escapes_single_quotes() -> None:
+    line = media._concat_file_line(Path("/tmp/it's.mp4"))
+    assert line == "file '/tmp/it'\\''s.mp4'"
+
+
+@pytest.mark.unit
+def test_write_concat_list_repeats_last_file(tmp_path: Path) -> None:
+    a = tmp_path / "1.jpg"
+    b = tmp_path / "2.jpg"
+    list_path = tmp_path / "concat.txt"
+    media._write_concat_list([(a, 3), (b, 7)], list_path)
+    text = list_path.read_text()
+    assert text.splitlines()[0] == "ffconcat version 1.0"
+    assert text.count(f"file '{b}'") == 2
+    assert "duration 3" in text
+    assert "duration 7" in text
 
 
 @pytest.mark.unit

@@ -44,14 +44,27 @@ def _slide_duration(
     return slide_duration
 
 
-def _prepare_slide(path: Path, duration: float):
-    return (
-        ffmpeg.input(str(path), loop=1, t=duration, framerate=30)
-        .filter("scale", 1080, 1920, force_original_aspect_ratio="decrease")
-        .filter("pad", 1080, 1920, "(ow-iw)/2", "(oh-ih)/2")
-        .filter("format", "yuv420p")
-        .filter("setsar", 1)
-    )
+_SLIDE_VF = (
+    "scale=1080:1920:force_original_aspect_ratio=decrease,"
+    "pad=1080:1920:(ow-iw)/2:(oh-ih)/2,"
+    "format=yuv420p,"
+    "setsar=1"
+)
+
+
+def _concat_file_line(path: Path) -> str:
+    escaped = str(path).replace("'", r"'\''")
+    return f"file '{escaped}'"
+
+
+def _write_concat_list(entries: list[tuple[Path, float]], list_path: Path) -> None:
+    lines = ["ffconcat version 1.0"]
+    for path, duration in entries:
+        lines.append(_concat_file_line(path))
+        lines.append(f"duration {duration}")
+    # duration последнего файла применяется только до следующего file
+    lines.append(_concat_file_line(entries[-1][0]))
+    list_path.write_text("\n".join(lines) + "\n")
 
 
 def render_slideshow(video_id: str) -> bool:
@@ -78,28 +91,38 @@ def render_slideshow(video_id: str) -> bool:
     total_video_len = max(slideshow_len, sound_len)
     hold_last_frame = total_video_len - slideshow_len
 
-    slides = [
-        _prepare_slide(
+    logger.info("Rendering slideshow: %d images, %d seconds total", image_count, total_video_len)
+
+    output_path = Path(SLIDESHOW_TMP_DIR) / "output.mp4"
+    concat_list_path = Path(SLIDESHOW_TMP_DIR) / "concat.txt"
+    entries = [
+        (
             SLIDESHOW_TMP_DIR / name,
             _slide_duration(index, image_count, t, hold_last_frame),
         )
         for index, name in enumerate(image_files)
     ]
-    video = ffmpeg.concat(*slides, v=1, a=0)
-
-    logger.info("Rendering slideshow: %d images, %d seconds total", image_count, total_video_len)
-
     try:
+        if image_count == 1:
+            # Concat demuxer of one JPEG emits a single frame (6s/60s class of bug)
+            video = ffmpeg.input(str(entries[0][0]), loop=1, t=total_video_len, framerate=30)
+        else:
+            _write_concat_list(entries, concat_list_path)
+            video = ffmpeg.input(str(concat_list_path), format="concat", safe=0)
         (
             ffmpeg.output(
                 video,
                 ffmpeg.input(str(audio_path)),
-                str(SLIDESHOW_TMP_DIR / "output.mp4"),
+                str(output_path),
+                vf=_SLIDE_VF,
+                r=30,
+                fps_mode="cfr",
                 g=900,
                 acodec="aac",
                 vcodec="libx264",
                 tune="stillimage",
                 t=total_video_len,
+                movflags="+faststart",
                 loglevel="error",
             )
             .overwrite_output()
@@ -109,11 +132,10 @@ def render_slideshow(video_id: str) -> bool:
         logger.error("Error rendering slideshow: %s", _ffmpeg_stderr_message(e))
         return False
 
-    if (Path(SLIDESHOW_TMP_DIR) / "output.mp4").exists():
+    if output_path.exists():
         # Копирование результата в директорию загрузок
-        output_file_path = Path(SLIDESHOW_TMP_DIR) / "output.mp4"
         target_path = Path(DOWNLOADS_DIR) / f"{video_id}.mp4"
-        shutil.copy(output_file_path, target_path)
+        shutil.copy(output_path, target_path)
         logger.info("Slideshow saved: %s.mp4", video_id)
         return True
     return False
