@@ -1,6 +1,6 @@
 [project]
 name = "atp"
-version = "1.8.6"
+version = "1.8.7"
 requires-python = ">=3.10"
 dependencies = [
     "alembic>=1.15.2",
@@ -10,7 +10,7 @@ dependencies = [
     "requests>=2.32.3",
     "schedule>=1.2.2",
     "sqlalchemy>=2.0.41",
-    "yt-dlp[curl-cffi]>=2026.6.9",
+    "yt-dlp[curl-cffi]>=2026.8.19",
 ]
 
 [dependency-groups]
