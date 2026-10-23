@@ -1,3 +1,4 @@
+import contextlib
 import itertools
 import logging
 import re
@@ -320,6 +321,12 @@ def get_error_message(e: Exception) -> str:
     return str(e)
 
 
+def close_after_iteration(entries, stack: contextlib.ExitStack):
+    """Закрывает stack после того как entries дочитаны или брошены"""
+    with stack:
+        yield from entries
+
+
 def yt_dlp_request(
     ydl_opts: dict[str, any],
     url: str,
@@ -349,16 +356,19 @@ def yt_dlp_request(
             # используем cookies только когда это необходимо
             ydl_opts["cookiefile"] = COOKIES_FILE
         try:
-            with yt_dlp.YoutubeDL(ydl_opts.copy()) as ydl:
+            with contextlib.ExitStack() as stack:
+                ydl = stack.enter_context(yt_dlp.YoutubeDL(ydl_opts.copy()))
                 match url:  # tmp пока код не замерджили в yt-dlp
                     case url if url.startswith("https://www.tiktok.com/@/video/"):
                         return ydl.extract_info(url, process=download)
                     case url if url.startswith("tiktokliked:"):
-                        return TikTokLikedIE(ydl).extract(url)
+                        info = TikTokLikedIE(ydl).extract(url)
                     case url if url.startswith(":tiktoksaved"):
-                        return TikTokSavedIE(ydl).extract(url)
+                        info = TikTokSavedIE(ydl).extract(url)
                     case _:
                         raise ValueError(f"Invalid URL: {url}")
+                info["entries"] = close_after_iteration(info["entries"], stack.pop_all())
+                return info
         except Exception as e:
             error_msg = get_error_message(e)
             is_cookies_error = any(err in error_msg for err in COOKIE_ERRORS)
