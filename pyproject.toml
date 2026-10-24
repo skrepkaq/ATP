@@ -1,6 +1,6 @@
 [project]
 name = "atp"
-version = "1.8.8"
+version = "1.8.9"
 requires-python = ">=3.10"
 dependencies = [
     "alembic>=1.15.2",
@@ -19,6 +19,10 @@ dev = [
     "pytest-cov>=7.0.0",
     "ruff>=0.11.10",
 ]
+
+[tool.uv]
+# certifi 2026.10.23 drops the compromised eMudhra roots; remove after 2026-11-02
+exclude-newer-package = { certifi = false }
 
 [tool.ruff]
 line-length = 100
